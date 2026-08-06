@@ -12,7 +12,7 @@ An educational course platform that tracks user behavior (views, searches, click
 
 ## 🌟 Key Product Features
 
-- **Mesh API Native Compliance**: 100% of LLM reasoning (`openai/gpt-4o-mini`), narrative copywriting (`openai/gpt-4o`), and vector embeddings (`openai/text-embedding-3-small`) pass through `https://api.meshapi.ai/v1`.
+- **Mesh API Native Compliance**: 100% of LLM reasoning & narrative copywriting (`tencent/hy3`) and vector embeddings (`sentence-transformers/all-minilm-l6-v2`) pass through `https://api.meshapi.ai/v1`.
 - **Transactional Dual-Write Engine**: Products are stored in **SQLite DB** (configured in WAL mode for concurrent performance) and embedded into **ChromaDB** simultaneously.
 - **Non-Blocking Behavior Ingestion**: `tracker.js` batches event data in memory and flushes every 5s or 20 events using `navigator.sendBeacon`.
 - **Smart Trigger Engine**: Evaluates 6 trigger conditions (cold-start, high-intent, session event threshold, search signal, staleness, manual refresh) guarded by a 10-minute cooldown and behavior hash comparison to optimize API calls.
@@ -91,9 +91,8 @@ pytest tests/ -v
 ## 🔒 Mesh API Compliance Statement
 
 All generative text calls and vector embeddings in this project strictly use Mesh API (`https://api.meshapi.ai/v1`).
-- `openai/gpt-4o-mini`: Behavior Analysis & Evaluation/Reranking
-- `openai/gpt-4o`: AIDA Persuasive Copywriting Narrative
-- `openai/text-embedding-3-small`: Custom `MeshEmbeddingFunction` for ChromaDB vector search
+- `tencent/hy3`: Behavior Analysis, Evaluation/Reranking & AIDA Persuasive Copywriting Narrative
+- `sentence-transformers/all-minilm-l6-v2`: Custom `MeshEmbeddingFunction` for ChromaDB vector search
 
 ---
 

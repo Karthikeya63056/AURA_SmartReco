@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 # Map free-form LLM interest labels → actual Product.category values in seed data.
 # Without this, Chroma `$in` filters on raw interests (e.g. "Artificial Intelligence")
 # never match catalog categories (e.g. "AI & Agents") and always return 0 hits.
+# NOTE: Expand this map in the future as new catalog categories are added to seed data.
+# The unfiltered search fallback (in retrieve_candidates_node) covers unmapped interests.
 CATEGORY_MAP = {
     "Artificial Intelligence": "AI & Agents",
     "AI": "AI & Agents",
@@ -200,7 +202,12 @@ async def retrieve_candidates_node(state: AgentState) -> Dict[str, Any]:
         else:
             logger.info(f"[Node 2] No category mapping for interests {interests}; skipping category filter")
 
-    if len(filters_list) == 1:
+    # Check if drop_filters flag is set (refetch pass)
+    drop_filters = state.get("drop_filters", False)
+    if drop_filters:
+        logger.info("[Node 2] drop_filters is True; skipping metadata filters to broaden candidate pool")
+        where_filter = None
+    elif len(filters_list) == 1:
         where_filter = filters_list[0]
     elif len(filters_list) > 1:
         where_filter = {"$and": filters_list}

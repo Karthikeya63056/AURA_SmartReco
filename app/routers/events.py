@@ -1,5 +1,6 @@
 import logging
-from typing import Dict, Any
+import time
+from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -8,23 +9,28 @@ from app.models.event import Event
 from app.models.user import User
 from app.core.cache import cache
 from app.services.trigger_engine import TriggerEngine
-from app.dependencies import get_current_user_optional
+from app.dependencies import get_current_user_optional, get_anonymous_user
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/events", tags=["Events"])
 
-RATE_LIMIT_MAX = 100
-RATE_LIMIT_WINDOW_SEC = 60
+# In-memory rate limiting map: rate_key -> list of timestamps
+_rate_limit_map: Dict[str, List[float]] = {}
+RATE_LIMIT_WINDOW_SECONDS = 60
+MAX_EVENTS_PER_WINDOW = 100
 
 
-def _check_rate_limit(user_key: str) -> bool:
-    """Check in-memory rate limit per user/session."""
-    cache_key = f"rate_limit:{user_key}"
-    current_count = cache.get(cache_key) or 0
-    if current_count >= RATE_LIMIT_MAX:
+def _check_rate_limit(rate_key: str) -> bool:
+    """Simple sliding window rate limiter."""
+    now = time.time()
+    timestamps = _rate_limit_map.get(rate_key, [])
+    # Keep only timestamps within window
+    timestamps = [ts for ts in timestamps if now - ts <= RATE_LIMIT_WINDOW_SECONDS]
+    if len(timestamps) >= MAX_EVENTS_PER_WINDOW:
         return False
-    cache.set(cache_key, current_count + 1, ttl_seconds=RATE_LIMIT_WINDOW_SEC)
+    timestamps.append(now)
+    _rate_limit_map[rate_key] = timestamps
     return True
 
 
@@ -41,8 +47,9 @@ def ingest_event_batch(
     if not payload.events:
         return {"status": "success", "ingested": 0, "trigger": {"should_run_agent": False}}
 
-    # Determine user_id (authenticated user or fallback to demo user ID 2)
-    user_id = current_user.id if current_user else 2
+    # Determine user_id (authenticated user or fallback to guest demo user ID 2)
+    user = current_user or get_anonymous_user(db)
+    user_id = user.id
     session_id = payload.events[0].session_id if payload.events else "default_session"
 
     # Rate limiting check
@@ -53,13 +60,17 @@ def ingest_event_batch(
             detail="Event rate limit exceeded. Max 100 events per minute."
         )
 
+    # Batch deduplication check via idempotency_keys (eliminates N+1 DB queries)
+    keys = [e.idempotency_key for e in payload.events if e.idempotency_key]
+    existing_keys = set()
+    if keys:
+        existing_rows = db.query(Event.idempotency_key).filter(Event.idempotency_key.in_(keys)).all()
+        existing_keys = {row[0] for row in existing_rows}
+
     ingested_count = 0
     for item in payload.events:
-        # Deduplication check via idempotency_key
-        if item.idempotency_key:
-            existing = db.query(Event).filter(Event.idempotency_key == item.idempotency_key).first()
-            if existing:
-                continue
+        if item.idempotency_key and item.idempotency_key in existing_keys:
+            continue
 
         event_obj = Event(
             user_id=user_id,

@@ -59,9 +59,8 @@ class TriggerEngine:
                 "cold_start": False
             }
 
-        # Query all events for user
-        all_events = db.query(Event).filter(Event.user_id == user_id).order_by(Event.created_at.desc()).all()
-        total_events = len(all_events)
+        # Count total events efficiently without pulling full dataset into memory
+        total_events = db.query(Event).filter(Event.user_id == user_id).count()
 
         # 1. Cold-start condition: < 3 total events
         if total_events < 3:
@@ -75,8 +74,10 @@ class TriggerEngine:
                 "products": popular_courses
             }
 
+        # Fetch top 20 recent events for hash & intent analysis
+        recent_events = db.query(Event).filter(Event.user_id == user_id).order_by(Event.created_at.desc()).limit(20).all()
+
         # Check behavior hash for duplication avoidance
-        recent_events = all_events[:20]
         current_hash = compute_behavior_hash(recent_events)
         user_profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
         if user_profile and user_profile.behavior_hash == current_hash and last_rec and last_rec.is_active:
@@ -87,15 +88,18 @@ class TriggerEngine:
             }
 
         # 2. High-intent action signal in last 15 min
-        recent_15m_events = [e for e in all_events if e.created_at >= fifteen_minutes_ago]
+        recent_15m_events = [e for e in recent_events if e.created_at >= fifteen_minutes_ago]
         has_high_intent = any(e.event_type in HIGH_INTENT_TYPES for e in recent_15m_events)
         if has_high_intent:
             return {"should_run_agent": True, "trigger_reason": "high_intent", "cold_start": False}
 
         # 3. Session event threshold (>= 5 events in current session)
         if current_session_id:
-            session_events = [e for e in all_events if e.session_id == current_session_id]
-            if len(session_events) >= 5:
+            session_event_count = db.query(Event).filter(
+                Event.user_id == user_id,
+                Event.session_id == current_session_id
+            ).count()
+            if session_event_count >= 5:
                 return {"should_run_agent": True, "trigger_reason": "event_threshold", "cold_start": False}
 
         # 4. Search signal (>= 2 searches in last 15 min)

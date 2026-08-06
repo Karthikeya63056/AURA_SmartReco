@@ -100,8 +100,8 @@ class RecommendationService:
         if cached_rec:
             # Attach product objects
             pids = cached_rec.get("product_ids", [])
-            products = [get_product(db, pid) for pid in pids if get_product(db, pid)]
-            cached_rec["products"] = products
+            fetched = [get_product(db, pid) for pid in pids]
+            cached_rec["products"] = [p for p in fetched if p]
             return cached_rec
 
         # Fetch from DB
@@ -112,7 +112,8 @@ class RecommendationService:
 
         if rec:
             pids = rec.product_ids_json or []
-            products = [get_product(db, pid) for pid in pids if get_product(db, pid)]
+            fetched = [get_product(db, pid) for pid in pids]
+            products = [p for p in fetched if p]
             result = {
                 "id": rec.id,
                 "narrative": rec.narrative,

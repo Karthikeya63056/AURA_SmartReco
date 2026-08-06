@@ -12,6 +12,27 @@ logger = logging.getLogger(__name__)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
+def get_anonymous_user(db: Session) -> User:
+    """Return default guest demo user (ID=2), creating it on the fly if it does not exist."""
+    user = db.query(User).filter(User.id == 2).first()
+    if not user:
+        user = User(
+            id=2,
+            email="guest@example.com",
+            hashed_password="guest_demo_password_hash",
+            full_name="Guest Demo User",
+            is_admin=False
+        )
+        db.add(user)
+        try:
+            db.commit()
+            db.refresh(user)
+        except Exception:
+            db.rollback()
+            user = db.query(User).filter(User.id == 2).first()
+    return user
+
+
 def get_current_user_optional(
     token: Optional[str] = Depends(oauth2_scheme),
     db: Session = Depends(get_db)

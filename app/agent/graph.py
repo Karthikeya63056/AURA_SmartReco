@@ -23,16 +23,15 @@ logger = logging.getLogger(__name__)
 
 
 async def refetch_node(state: AgentState) -> Dict[str, Any]:
-    """Intermediate node that increments refetch count and broadens search query."""
+    """Intermediate node that increments refetch count and sets drop_filters flag."""
     current_count = state.get("refetch_count", 0) + 1
     query = state.get("search_query", "AI course")
-    # Broaden query phrase
-    broad_query = f"{query} fundamentals advanced machine learning python"
-    logger.info(f"[Refetch Loop] Refetch #{current_count} triggered. Broadening query to: '{broad_query}'")
+    logger.info(f"[Refetch Loop] Refetch #{current_count} triggered. Dropping metadata filters to broaden retrieval.")
 
     return {
         "refetch_count": current_count,
-        "search_query": broad_query
+        "search_query": query,
+        "drop_filters": True
     }
 
 

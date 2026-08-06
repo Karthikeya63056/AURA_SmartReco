@@ -96,11 +96,39 @@ def update_product(db: Session, product_id: int, product_data: Dict[str, Any]) -
         db.refresh(product)
         return product
     except Exception as e:
-        logger.error(f"ChromaDB dual-write failed during update_product (ID {product_id}): {str(e)}")
         product.needs_reindex = True
         db.commit()
         db.refresh(product)
         return product
+
+
+def reindex_pending_products(db: Session) -> int:
+    """
+    Attempt to re-embed and upsert all products flagged with needs_reindex=True directly to ChromaDB.
+    """
+    pending = db.query(Product).filter(Product.needs_reindex == True).all()
+    if not pending:
+        return 0
+
+    collection = get_products_collection()
+    success_count = 0
+    for product in pending:
+        try:
+            doc_text = _build_product_document_text(product)
+            metadata = _build_product_chroma_metadata(product)
+            collection.upsert(
+                ids=[str(product.id)],
+                documents=[doc_text],
+                metadatas=[metadata]
+            )
+            product.needs_reindex = False
+            db.commit()
+            success_count += 1
+        except Exception as e:
+            logger.error(f"Reindex failed for product ID {product.id}: {str(e)}")
+            db.rollback()
+
+    return success_count
 
 
 def delete_product(db: Session, product_id: int) -> bool:

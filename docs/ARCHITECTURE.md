@@ -5,7 +5,7 @@ SmartReco 2026 is an agentic, personalized course recommendation platform design
 ```mermaid
 flowchart TD
     subgraph Layer 1: Client & Ingestion
-        A[Browser Client / tracker.js] -->|Batched sendBeacon / 5s| B[FastAPI Ingestion Endpoint]
+        A[Browser Client / tracker.js] -->|Batched fetch / 5s| B[FastAPI Ingestion Endpoint]
     end
 
     subgraph Layer 2: Core Storage & Dual-Write
@@ -23,12 +23,12 @@ flowchart TD
 
     subgraph Layer 4: LangGraph Agentic Workflow
         H --> N1[1. Analyze Behavior Node]
-        N1 -->|gpt-4o-mini| N2[2. Retrieve Candidates Node]
+        N1 -->|tencent/hy3| N2[2. Retrieve Candidates Node]
         N2 -->|Chroma + Mesh Embedding| N3[3. Evaluate & Rerank Node]
-        N3 -->|Quality Score < 60 & Count < 2| N4[Refetch Edge Broaden Query]
+        N3 -->|Quality Score < 60 & Count < 2| N4[Refetch Edge Drop Filters]
         N4 --> N2
         N3 -->|Quality Score >= 60| N5[4. Generate AIDA Narrative Node]
-        N5 -->|gpt-4o| N6[5. Store & Invalidate Cache Node]
+        N5 -->|tencent/hy3| N6[5. Store & Invalidate Cache Node]
     end
 
     subgraph Layer 5: Presentation & Scheduler
@@ -40,12 +40,12 @@ flowchart TD
 ## Architectural Rationale
 
 1. **Mesh API Gateway Compliance**:
-   All LLM calls (`openai/gpt-4o-mini`, `openai/gpt-4o`) and Embedding queries/indexing (`openai/text-embedding-3-small`) pass strictly through `https://api.meshapi.ai/v1`.
+   All LLM reasoning & narrative generation (`tencent/hy3`) and Embedding queries/indexing (`sentence-transformers/all-minilm-l6-v2`) pass strictly through `https://api.meshapi.ai/v1`.
 2. **Dual-Write Integrity**:
    Product modifications insert/update SQLite via SQLAlchemy transactions first, followed by ChromaDB upsert via custom `MeshEmbeddingFunction`.
 3. **Non-Blocking Client Tracking**:
-   `tracker.js` batches events in-memory, flushing every 5 seconds or 20 events. `navigator.sendBeacon` guarantees delivery even when navigating across pages.
+   `tracker.js` batches events in-memory, flushing every 5 seconds or 20 events. Periodic flushes use `fetch()` to process real-time trigger responses, while `navigator.sendBeacon` guarantees delivery on page unload.
 4. **Smart Triggering & Cooldowns**:
    Prevents unnecessary LLM costs by enforcing a 10-minute cooldown and behavior hash comparison, evaluating 6 trigger conditions before invoking the 5-node agent graph.
 5. **Self-Correction Refetch Loop**:
-   If candidate quality score evaluates below 60, the agent loops back up to 2 times, broadening search queries and parameter bounds.
+   If candidate quality score evaluates below 60, the agent loops back up to 2 times, setting `drop_filters = True` to expand candidate retrieval.

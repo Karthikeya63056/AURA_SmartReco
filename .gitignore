@@ -1,6 +1,8 @@
 .env
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 chroma_data/
 __pycache__/
 *.pyc
