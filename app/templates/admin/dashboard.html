@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard — SmartReco 2026{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-extrabold tracking-tight text-slate-100 flex items-center space-x-3">
+                <i class="fa-solid fa-shield-halved text-amber-400"></i>
+                <span>Admin Command Center</span>
+            </h1>
+            <p class="text-slate-400 text-sm">Monitor system metrics, run manual daily digests, inspect agent traces, and manage course dual-writes.</p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <a href="/admin/products" class="bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 px-4 py-2.5 rounded-xl border border-slate-700 transition-all flex items-center space-x-2">
+                <i class="fa-solid fa-boxes-stacked text-cyan-400"></i>
+                <span>Manage Course Catalog</span>
+            </a>
+            <button onclick="runDigestNow()" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-extrabold text-xs px-4 py-2.5 rounded-xl shadow-lg transition-all flex items-center space-x-2">
+                <i class="fa-solid fa-paper-plane"></i>
+                <span>Run Digest Now</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+        <div class="glass-panel rounded-xl p-5 border border-slate-800 space-y-2">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Courses</span>
+            <div class="text-3xl font-extrabold text-slate-100">{{ product_count }}</div>
+            <p class="text-[11px] text-cyan-400">Dual-written to SQLite + Chroma</p>
+        </div>
+        <div class="glass-panel rounded-xl p-5 border border-slate-800 space-y-2">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Tracked Events</span>
+            <div class="text-3xl font-extrabold text-slate-100">{{ event_count }}</div>
+            <p class="text-[11px] text-indigo-400">Ingested via non-blocking batch</p>
+        </div>
+        <div class="glass-panel rounded-xl p-5 border border-slate-800 space-y-2">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Recommendations</span>
+            <div class="text-3xl font-extrabold text-slate-100">{{ rec_count }}</div>
+            <p class="text-[11px] text-emerald-400">LangGraph state evaluations</p>
+        </div>
+        <div class="glass-panel rounded-xl p-5 border border-slate-800 space-y-2">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Mesh API Gateway</span>
+            <div class="text-3xl font-extrabold text-amber-400">100%</div>
+            <p class="text-[11px] text-slate-400">LLM & Embedding Compliance</p>
+        </div>
+    </div>
+
+    <!-- Quick User Agent Trace Lookup -->
+    <div class="glass-panel rounded-2xl p-6 border border-slate-800 space-y-4">
+        <h2 class="text-xl font-bold text-slate-100 flex items-center space-x-2">
+            <i class="fa-solid fa-magnifying-glass text-cyan-400"></i>
+            <span>Inspect User Agent State Trace</span>
+        </h2>
+        <div class="flex items-center space-x-4 max-w-md">
+            <input type="number" id="trace-user-id" value="2" placeholder="User ID" class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500 w-32">
+            <button onclick="viewTrace()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl transition-all">
+                View Trace Log
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function runDigestNow() {
+        try {
+            const res = await fetch('/admin/run-digest-now', { method: 'POST' });
+            const data = await res.json();
+            alert(`Daily Digest Triggered! Processed ${data.processed} active users.`);
+        } catch (err) {
+            alert('Failed to trigger daily digest: ' + err.message);
+        }
+    }
+
+    function viewTrace() {
+        const uid = document.getElementById('trace-user-id').value;
+        window.location.href = `/admin/trace/${uid}`;
+    }
+</script>
+{% endblock %}

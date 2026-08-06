@@ -1,0 +1,11 @@
+.env
+*.db
+*.db-journal
+chroma_data/
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+venv/
+.venv/
+.pytest_cache/
