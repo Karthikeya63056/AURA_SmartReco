@@ -2,6 +2,7 @@ import logging
 from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.core.database import get_db
 from app.dependencies import get_admin_user
@@ -15,24 +16,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
-@router.post("/run-digest-now")
-async def trigger_daily_digest_now(
-    db: Session = Depends(get_db),
-    admin: User = Depends(get_admin_user)
-):
-    """Manually trigger daily digest batch job for all active users."""
-    from app.scheduler.daily_digest import run_daily_digest_job
-    results = await run_daily_digest_job()
-    return {"status": "success", "processed": results}
-
-
-@router.get("/agent-trace/{user_id}")
-def get_agent_trace(
-    user_id: int,
-    db: Session = Depends(get_db),
-    admin: User = Depends(get_admin_user)
-):
-    """Inspect recent agent execution trace, user profile, and recommendation metadata."""
+def _fetch_agent_trace_data(db: Session, user_id: int) -> Dict[str, Any]:
+    """Synchronous database query helper for agent trace inspection."""
     profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
     recent_events = db.query(Event).filter(Event.user_id == user_id).order_by(Event.created_at.desc()).limit(20).all()
     recommendations = db.query(Recommendation).filter(Recommendation.user_id == user_id).order_by(Recommendation.created_at.desc()).limit(5).all()
@@ -68,3 +53,28 @@ def get_agent_trace(
             } for r in recommendations
         ]
     }
+
+
+@router.post("/run-digest-now")
+async def trigger_daily_digest_now(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user)
+):
+    """Manually trigger daily digest batch job for all active users."""
+    from app.scheduler.daily_digest import run_daily_digest_job
+    results = await run_daily_digest_job()
+    return {"status": "success", "processed": results}
+
+
+@router.get("/agent-trace/{user_id}")
+async def get_agent_trace(
+    user_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_admin_user)
+):
+    """
+    Inspect recent agent execution trace, user profile, and recommendation metadata.
+    Uses run_in_threadpool for non-blocking DB access.
+    """
+    trace_data = await run_in_threadpool(_fetch_agent_trace_data, db, user_id)
+    return trace_data

@@ -2,6 +2,7 @@ import logging
 from typing import Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.core.database import get_db
 from app.dependencies import get_current_user_optional, get_current_user
@@ -14,16 +15,17 @@ router = APIRouter(prefix="/api/recommendations", tags=["Recommendations"])
 
 
 @router.get("")
-def get_recommendations(
+async def get_recommendations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_optional)
 ):
     """
     Get active recommendation narrative and recommended course products.
     Falls back to popular courses for cold-start (<3 events) users.
+    Uses run_in_threadpool to ensure DB queries don't block the async event loop.
     """
     user_id = current_user.id if current_user else 2  # Demo user fallback
-    rec = RecommendationService.get_active(db, user_id)
+    rec = await run_in_threadpool(RecommendationService.get_active, db, user_id)
     return rec
 
 

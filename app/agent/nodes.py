@@ -102,15 +102,45 @@ async def analyze_behavior_node(state: AgentState) -> Dict[str, Any]:
 
 
 async def retrieve_candidates_node(state: AgentState) -> Dict[str, Any]:
-    """Node 2: Retrieve course candidates from Chroma vector store using Mesh embeddings."""
+    """Node 2: Retrieve course candidates from Chroma vector store using Mesh embeddings and metadata filtering."""
     search_query = state.get("search_query", "AI machine learning")
     refetch_count = state.get("refetch_count", 0)
+    user_profile = state.get("user_profile", {})
     
     # Broaden query on refetch
     n_results = 20 if refetch_count > 0 else 15
-    logger.info(f"[Node 2] Vector search for '{search_query}' (n_results={n_results}, refetch_count={refetch_count})")
 
-    candidates = search_products_vector(query_text=search_query, n_results=n_results)
+    # Build metadata filters from user profile (retrieval polish bonus)
+    filters_list = []
+    skill_level = user_profile.get("skill_level")
+    if skill_level and skill_level != "Unknown":
+        filters_list.append({"level": skill_level})
+
+    # Category filter on initial pass
+    interests = user_profile.get("interests", [])
+    if interests and refetch_count == 0:
+        filters_list.append({"category": {"$in": interests[:3]}})
+
+    if len(filters_list) == 1:
+        where_filter = filters_list[0]
+    elif len(filters_list) > 1:
+        where_filter = {"$and": filters_list}
+    else:
+        where_filter = None
+
+    logger.info(f"[Node 2] Vector search for '{search_query}' (n_results={n_results}, refetch_count={refetch_count}, where_filter={where_filter})")
+
+    candidates = search_products_vector(
+        query_text=search_query,
+        n_results=n_results,
+        where_filter=where_filter
+    )
+
+    # If filtered search returned 0 candidates, fallback to unfiltered search
+    if not candidates and where_filter:
+        logger.info("[Node 2] Filtered search returned 0 candidates, falling back to unfiltered search")
+        candidates = search_products_vector(query_text=search_query, n_results=n_results)
+
     return {"candidates": candidates}
 
 

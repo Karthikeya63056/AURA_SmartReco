@@ -11,6 +11,14 @@ from app.services.product_service import get_product
 from app.services.trigger_engine import TriggerEngine
 from app.core.cache import cache
 
+try:
+    from langsmith import traceable
+except ImportError:
+    def traceable(name: str = "", run_type: str = "chain"):
+        def decorator(func):
+            return func
+        return decorator
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,6 +36,7 @@ class RecommendationService:
         return TriggerEngine.evaluate_trigger(db, user_id, session_id, manual_force)
 
     @staticmethod
+    @traceable(name="generate_recommendation", run_type="chain")
     async def generate_and_store(
         db: Session,
         user_id: int,

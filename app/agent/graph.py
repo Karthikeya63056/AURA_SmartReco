@@ -10,6 +10,15 @@ from app.agent.nodes import (
     store_node
 )
 
+try:
+    from langsmith import traceable
+except ImportError:
+    # No-op decorator fallback if langsmith is not installed
+    def traceable(name: str = "", run_type: str = "chain"):
+        def decorator(func):
+            return func
+        return decorator
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,8 +50,9 @@ def should_refetch(state: AgentState) -> str:
     return "proceed"
 
 
+@traceable(name="SmartRecoAgent", run_type="chain")
 def build_recommendation_graph() -> StateGraph:
-    """Construct and compile the recommendation StateGraph."""
+    """Construct and compile the recommendation StateGraph with LangSmith tracing."""
     workflow = StateGraph(AgentState)
 
     # Add Nodes
