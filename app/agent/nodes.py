@@ -17,6 +17,80 @@ from app.core.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
+# Map free-form LLM interest labels → actual Product.category values in seed data.
+# Without this, Chroma `$in` filters on raw interests (e.g. "Artificial Intelligence")
+# never match catalog categories (e.g. "AI & Agents") and always return 0 hits.
+CATEGORY_MAP = {
+    "Artificial Intelligence": "AI & Agents",
+    "AI": "AI & Agents",
+    "Agentic AI": "AI & Agents",
+    "Agents": "AI & Agents",
+    "LangGraph": "AI & Agents",
+    "LangChain": "AI & Agents",
+    "Generative AI": "AI & Agents",
+    "GenAI": "AI & Agents",
+    "Machine Learning": "AI & Machine Learning",
+    "Deep Learning": "AI & Machine Learning",
+    "Neural Networks": "AI & Machine Learning",
+    "Computer Vision": "AI & Vision",
+    "Vision": "AI & Vision",
+    "NLP": "AI & NLP",
+    "Natural Language Processing": "AI & NLP",
+    "Recommendation Systems": "Recommendation AI",
+    "Recommendations": "Recommendation AI",
+    "AI Security": "AI Security",
+    "Security": "AI Security",
+    "Edge AI": "AI & Edge",
+    "Software Engineering": "Web Dev & AI",
+    "Web Development": "Web Dev",
+    "Full Stack": "Web Dev & AI",
+    "Frontend": "Web Dev",
+    "Backend": "Backend Dev",
+    "Backend Development": "Backend Dev",
+    "API Development": "Backend Dev",
+    "Python": "Python & Data",
+    "Data Science": "Python & Data",
+    "Data Engineering": "Data Engineering",
+    "Databases": "Database & AI",
+    "SQL": "Database & AI",
+    "Vector Databases": "Database & AI",
+    "MLOps": "MLOps & Cloud",
+    "DevOps": "MLOps & Cloud",
+    "Cloud Computing": "MLOps & Cloud",
+    "Kubernetes": "MLOps & Cloud",
+    "Product Management": "Product & AI",
+    "Testing": "Python & Testing",
+    "Systems Programming": "Python & Systems",
+}
+
+
+def _map_interests_to_categories(interests: list) -> list:
+    """Translate LLM interest strings into catalog category names (deduped)."""
+    mapped: list = []
+    for interest in interests:
+        if not interest or not isinstance(interest, str):
+            continue
+        if interest in CATEGORY_MAP:
+            mapped.append(CATEGORY_MAP[interest])
+            continue
+        # Case-insensitive exact key match
+        interest_lower = interest.lower().strip()
+        exact = next(
+            (v for k, v in CATEGORY_MAP.items() if k.lower() == interest_lower),
+            None,
+        )
+        if exact:
+            mapped.append(exact)
+            continue
+        # Partial bidirectional match
+        for key, value in CATEGORY_MAP.items():
+            key_lower = key.lower()
+            if key_lower in interest_lower or interest_lower in key_lower:
+                mapped.append(value)
+                break
+    # Preserve order while deduping
+    return list(dict.fromkeys(mapped))
+
 
 def _extract_json(text: str) -> dict:
     """
@@ -116,10 +190,15 @@ async def retrieve_candidates_node(state: AgentState) -> Dict[str, Any]:
     if skill_level and skill_level != "Unknown":
         filters_list.append({"level": skill_level})
 
-    # Category filter on initial pass
+    # Category filter on initial pass — map LLM interests → real product categories
     interests = user_profile.get("interests", [])
     if interests and refetch_count == 0:
-        filters_list.append({"category": {"$in": interests[:3]}})
+        mapped_categories = _map_interests_to_categories(interests)
+        if mapped_categories:
+            filters_list.append({"category": {"$in": mapped_categories[:3]}})
+            logger.info(f"[Node 2] Mapped interests {interests} → categories {mapped_categories[:3]}")
+        else:
+            logger.info(f"[Node 2] No category mapping for interests {interests}; skipping category filter")
 
     if len(filters_list) == 1:
         where_filter = filters_list[0]

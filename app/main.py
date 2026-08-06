@@ -28,6 +28,15 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing SmartReco 2026 Database Tables...")
     Base.metadata.create_all(bind=engine)
 
+    # Recover products that failed dual-write (needs_reindex=True) on a prior run
+    try:
+        from app.services.product_service import reindex_needs_reindex_products
+        reindexed = reindex_needs_reindex_products()
+        if reindexed:
+            logger.info(f"Startup reindex recovered {reindexed} product(s)")
+    except Exception as e:
+        logger.warning(f"Startup reindex failed (will retry on next boot): {e}")
+
     logger.info("Starting APScheduler Daily Digest Background Job...")
     try:
         start_scheduler()

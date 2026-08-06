@@ -57,10 +57,15 @@ def _fetch_agent_trace_data(db: Session, user_id: int) -> Dict[str, Any]:
 
 @router.post("/run-digest-now")
 async def trigger_daily_digest_now(
-    db: Session = Depends(get_db),
     admin: User = Depends(get_admin_user)
 ):
-    """Manually trigger daily digest batch job for all active users."""
+    """
+    Manually trigger daily digest batch job for all active users.
+
+    run_daily_digest_job() offloads sync DB + agent work to a threadpool
+    (via asyncio.run in a worker), so this endpoint does not block the
+    FastAPI event loop.
+    """
     from app.scheduler.daily_digest import run_daily_digest_job
     results = await run_daily_digest_job()
     return {"status": "success", "processed": results}

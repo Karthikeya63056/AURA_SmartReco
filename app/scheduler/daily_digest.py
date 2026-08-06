@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import List
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.core.database import SessionLocal
 from app.models.user import User
@@ -17,10 +18,11 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
-async def run_daily_digest_job() -> int:
+async def _run_daily_digest_body() -> int:
     """
-    Find users active in last 24 hours, process in batches of 10 with 1s sleep,
-    generate agent recommendations, and send digest emails.
+    Core digest logic: find active users, generate recommendations, send emails.
+    Uses its own DB session. Intended to run inside a dedicated event loop
+    (either the scheduler loop via thread offload, or asyncio.run in a worker).
     """
     logger.info("Starting Daily Digest Job...")
     db: Session = SessionLocal()
@@ -28,7 +30,7 @@ async def run_daily_digest_job() -> int:
 
     try:
         twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
-        
+
         # Find distinct user IDs who had events in last 24h
         active_user_ids = db.query(Event.user_id).filter(
             Event.created_at >= twenty_four_hours_ago
@@ -55,8 +57,15 @@ async def run_daily_digest_job() -> int:
                     )
 
                     # Fetch recommended course objects
-                    products = [get_product(db, pid) for pid in rec_dict.get("product_ids", []) if get_product(db, pid)]
-                    courses_data = [{"title": p.title, "category": p.category, "price": p.price} for p in products]
+                    products = [
+                        get_product(db, pid)
+                        for pid in rec_dict.get("product_ids", [])
+                        if get_product(db, pid)
+                    ]
+                    courses_data = [
+                        {"title": p.title, "category": p.category, "price": p.price}
+                        for p in products
+                    ]
 
                     # Send email
                     send_daily_digest_email(
@@ -80,6 +89,26 @@ async def run_daily_digest_job() -> int:
         return processed_count
     finally:
         db.close()
+
+
+def _run_daily_digest_in_thread() -> int:
+    """
+    Synchronous entrypoint for threadpool workers.
+    Spins up a private event loop so sync SQLAlchemy work never blocks the
+    FastAPI main loop, while still allowing await on the LangGraph agent.
+    """
+    return asyncio.run(_run_daily_digest_body())
+
+
+async def run_daily_digest_job() -> int:
+    """
+    Async public API for the daily digest.
+
+    Offloads the full job (sync DB + async agent + email) to a threadpool worker
+    so callers on the main event loop (admin endpoint, APScheduler) stay responsive.
+    """
+    logger.info("Dispatching Daily Digest Job to threadpool...")
+    return await run_in_threadpool(_run_daily_digest_in_thread)
 
 
 def start_scheduler():

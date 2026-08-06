@@ -130,6 +130,43 @@ def get_product(db: Session, product_id: int) -> Optional[Product]:
     return db.query(Product).filter(Product.id == product_id).first()
 
 
+def reindex_needs_reindex_products() -> int:
+    """
+    Re-attempt Chroma dual-write for any products flagged needs_reindex=True.
+
+    Called on app startup so transient Mesh/Chroma failures during create/update
+    are recovered automatically without a manual reindex script run.
+    Returns the number of products successfully reindexed.
+    """
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
+    success_count = 0
+    try:
+        pending = db.query(Product).filter(Product.needs_reindex == True).all()  # noqa: E712
+        if not pending:
+            logger.info("Startup reindex: no products with needs_reindex=True")
+            return 0
+
+        logger.info(f"Startup reindex: attempting to reindex {len(pending)} product(s)...")
+        for product in pending:
+            try:
+                # update_product with empty patch re-upserts current fields to Chroma
+                updated = update_product(db, product.id, {})
+                if updated and not updated.needs_reindex:
+                    success_count += 1
+            except Exception as product_err:
+                logger.error(
+                    f"Startup reindex failed for product id={product.id}: {product_err}"
+                )
+        logger.info(
+            f"Startup reindex complete: {success_count}/{len(pending)} products recovered"
+        )
+        return success_count
+    finally:
+        db.close()
+
+
 def list_products(
     db: Session,
     category: Optional[str] = None,
