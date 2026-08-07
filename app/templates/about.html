@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}How AURA Works{% endblock %}
+
+{% block content %}
+
+<!-- ====================== HERO ====================== -->
+<section class="section fade-in" style="padding-top: 130px; padding-bottom: 30px;">
+  <div class="hero-badge" style="margin-bottom: 20px;">
+    Powered by Mesh API · LangGraph
+  </div>
+
+  <h1 class="section-title" style="font-size: clamp(2.2rem, 4.5vw, 3rem); margin-bottom: 16px;">
+    How AURA Works
+  </h1>
+
+  <p class="text-muted" style="max-width: 560px; font-size: 1.1rem; line-height: 1.7;">
+    AURA is not a simple recommendation widget. It is an agentic system that continuously
+    observes your behavior, reasons over it, and generates personalized course recommendations.
+  </p>
+</section>
+
+
+<!-- ====================== CORE LOOP ====================== -->
+<section class="section fade-in" style="padding-top: 20px;">
+  <div class="section-header">
+    <h2 class="section-title">The Agent Loop</h2>
+  </div>
+
+  <div class="steps stagger">
+    <div class="step-card fade-in">
+      <div class="step-num">01</div>
+      <h3>Observe</h3>
+      <p>
+        Every meaningful action — page views, searches, clicks, time spent — is tracked
+        in a non-blocking way and sent to the backend.
+      </p>
+    </div>
+
+    <div class="step-card fade-in">
+      <div class="step-num">02</div>
+      <h3>Understand</h3>
+      <p>
+        The LangGraph agent analyzes your recent behavior, extracts interests,
+        skill level, and intent, then builds a living profile.
+      </p>
+    </div>
+
+    <div class="step-card fade-in">
+      <div class="step-num">03</div>
+      <h3>Retrieve</h3>
+      <p>
+        Relevant courses are retrieved from the vector store using Mesh embeddings
+        and metadata filters grounded in the real catalog.
+      </p>
+    </div>
+  </div>
+
+  <div class="steps stagger" style="margin-top: 20px;">
+    <div class="step-card fade-in">
+      <div class="step-num">04</div>
+      <h3>Evaluate</h3>
+      <p>
+        The agent scores candidate courses for relevance. If quality is low,
+        it automatically broadens the search and tries again.
+      </p>
+    </div>
+
+    <div class="step-card fade-in">
+      <div class="step-num">05</div>
+      <h3>Generate</h3>
+      <p>
+        A persuasive narrative is written using a stronger model, explaining
+        why these specific courses match your current journey.
+      </p>
+    </div>
+
+    <div class="step-card fade-in">
+      <div class="step-num">06</div>
+      <h3>Deliver</h3>
+      <p>
+        The recommendation is stored, shown on your dashboard, and can be
+        refreshed as your behavior evolves.
+      </p>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== KEY CAPABILITIES ====================== -->
+<section class="section fade-in" style="padding-top: 10px;">
+  <div class="section-header">
+    <h2 class="section-title">Key Capabilities</h2>
+  </div>
+
+  <div class="course-grid stagger">
+    <div class="course-card fade-in" style="cursor: default;">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Core</span>
+      </div>
+      <div class="course-title">Behavioral Tracking</div>
+      <div class="course-desc">
+        Non-blocking event batching with sendBeacon, viewability tracking,
+        and time-on-page signals.
+      </div>
+    </div>
+
+    <div class="course-card fade-in" style="cursor: default;">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Core</span>
+      </div>
+      <div class="course-title">Dual-Write Catalog</div>
+      <div class="course-desc">
+        Every course is stored in SQLite and embedded into ChromaDB through Mesh API
+        so recommendations stay grounded.
+      </div>
+    </div>
+
+    <div class="course-card fade-in" style="cursor: default;">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Agent</span>
+      </div>
+      <div class="course-title">Self-Correcting Agent</div>
+      <div class="course-desc">
+        LangGraph workflow with a conditional refetch loop that improves
+        recommendation quality automatically.
+      </div>
+    </div>
+
+    <div class="course-card fade-in" style="cursor: default;">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Agent</span>
+      </div>
+      <div class="course-title">Persuasive Messaging</div>
+      <div class="course-desc">
+        Recommendations are not bare lists. They come with tailored narratives
+        designed to motivate action.
+      </div>
+    </div>
+
+    <div class="course-card fade-in" style="cursor: default;">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Efficiency</span>
+      </div>
+      <div class="course-title">Smart Triggers</div>
+      <div class="course-desc">
+        The agent only runs when it should — cold start, high intent, search signals,
+        staleness, or manual refresh.
+      </div>
+    </div>
+
+    <div class="course-card fade-in" style="cursor: default;">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Compliance</span>
+      </div>
+      <div class="course-title">100% Mesh Native</div>
+      <div class="course-desc">
+        All LLM reasoning and embeddings are routed through Mesh API.
+        No direct provider calls.
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== FINAL CTA ====================== -->
+<section class="section fade-in" style="padding-top: 10px; padding-bottom: 90px;">
+  <div class="rec-side-card" style="text-align: center; padding: 48px 32px;">
+    <h2 class="section-title" style="margin-bottom: 12px;">
+      Experience the agent yourself
+    </h2>
+    <p class="text-muted" style="max-width: 480px; margin: 0 auto 28px; font-size: 1.05rem;">
+      Create an account, explore a few courses, and watch AURA build recommendations
+      based on your real behavior.
+    </p>
+    <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+      <a href="/register" class="btn btn-cyan btn-lg">Get Started Free</a>
+      <a href="/catalog" class="btn btn-outline btn-lg">Browse Courses</a>
+    </div>
+  </div>
+</section>
+
+{% endblock %}

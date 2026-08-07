@@ -1,58 +1,68 @@
 {% extends "base.html" %}
-
-{% block title %}Course Catalog — SmartReco 2026{% endblock %}
+{% block title %}Catalog{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-            <h1 class="text-3xl font-extrabold tracking-tight text-slate-100">Full Course Catalog</h1>
-            <p class="text-slate-400 text-sm">Browse 25+ courses in Artificial Intelligence, LangGraph, RAG, and Cloud Architecture.</p>
-        </div>
-        <div class="relative w-full md:w-80">
-            <input type="text" id="catalog-search" oninput="SmartTrackerUtils.debounce(onSearchInput, 300)()" placeholder="Search courses..." class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 pl-10 text-sm focus:outline-none focus:border-cyan-500 text-slate-200">
-            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-500 text-sm"></i>
-        </div>
-    </div>
+<section class="section" style="padding-top:120px;">
+  <div class="section-header">
+    <h1 class="section-title">Course Catalog</h1>
+  </div>
 
-    <!-- Course Cards Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="catalog-grid">
-        {% for course in courses %}
-        <div class="glass-panel glass-panel-hover rounded-xl p-5 space-y-4 flex flex-col justify-between" data-course-id="{{ course.id }}" data-course-title="{{ course.title }}">
-            <div class="space-y-3">
-                <div class="flex items-center justify-between">
-                    <span class="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-cyan-400 border border-slate-700">{{ course.category }}</span>
-                    <span class="text-xs text-amber-400"><i class="fa-solid fa-star mr-1"></i>{{ course.rating }}</span>
-                </div>
-                <h3 class="font-bold text-slate-100 text-lg leading-snug">
-                    <a href="/course/{{ course.id }}">{{ course.title }}</a>
-                </h3>
-                <p class="text-slate-400 text-xs line-clamp-2">{{ course.description }}</p>
-                <div class="flex flex-wrap gap-1.5 pt-1">
-                    {% for tag in course.tags %}
-                    <span class="text-[10px] bg-slate-900 px-2 py-0.5 rounded text-slate-400 border border-slate-800">#{{ tag }}</span>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="pt-4 border-t border-slate-800/80 flex items-center justify-between">
-                <span class="text-lg font-extrabold text-slate-100">${{ "%.2f"|format(course.price) }}</span>
-                <a href="/course/{{ course.id }}" onclick="SmartTracker.track('click', {course_id: {{ course.id }}, target: 'catalog_view'})" class="text-xs font-semibold bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-3 py-1.5 rounded-lg transition-colors">
-                    Enroll Preview
-                </a>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-</div>
+  <div class="filters" id="filters">
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="AI & Agents">AI & Agents</button>
+    <button class="filter-btn" data-filter="AI & Machine Learning">Machine Learning</button>
+    <button class="filter-btn" data-filter="Web Dev">Web Dev</button>
+    <button class="filter-btn" data-filter="Python & Data">Python & Data</button>
+  </div>
+
+  <div class="course-grid">
+    {% for course in courses %}
+    <a href="/course/{{ course.id }}"
+       class="course-card"
+       data-course-id="{{ course.id }}"
+       data-course-title="{{ course.title }}"
+       data-category="{{ course.category }}">
+      <div class="course-meta">
+        <span class="badge badge-cyan">{{ course.category }}</span>
+        <span class="badge">{{ course.level }}</span>
+      </div>
+      <div class="course-title">{{ course.title }}</div>
+      <div class="course-desc">{{ course.description[:130] }}{% if course.description|length > 130 %}…{% endif %}</div>
+      <div class="course-footer">
+        <span class="course-price">
+          {% if course.price %}${{ '%.0f'|format(course.price) }}{% else %}Free{% endif %}
+        </span>
+        <span class="course-level">{{ course.level }}</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    function onSearchInput() {
-        const query = document.getElementById('catalog-search').value.trim();
-        if (query.length > 0) {
-            SmartTracker.track('search', { query: query, timestamp: new Date().toISOString() });
-        }
-    }
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const filter = btn.dataset.filter;
+      document.querySelectorAll('.course-card').forEach(card => {
+        card.style.display = (filter === 'all' || card.dataset.category === filter) ? '' : 'none';
+      });
+      if (window.SmartTracker) SmartTracker.track('filter', { category: filter });
+    });
+  });
+
+  document.querySelectorAll('.course-card').forEach(card => {
+    card.addEventListener('click', () => {
+      if (window.SmartTracker) {
+        SmartTracker.track('course_click', {
+          course_id: parseInt(card.dataset.courseId),
+          title: card.dataset.courseTitle
+        });
+      }
+    });
+  });
 </script>
 {% endblock %}

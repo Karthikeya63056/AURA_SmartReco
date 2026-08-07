@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}Your Profile{% endblock %}
+
+{% block content %}
+
+<!-- ====================== PROFILE HEADER ====================== -->
+<section class="section fade-in" style="padding-top: 130px; padding-bottom: 20px;">
+  <div class="hero-badge" style="margin-bottom: 18px;">
+    Your Learning Identity
+  </div>
+
+  <h1 class="section-title" style="font-size: clamp(2rem, 4vw, 2.8rem); margin-bottom: 8px;">
+    {{ user.email.split('@')[0] if user else 'Learner' }}
+  </h1>
+
+  <p class="text-muted" style="font-size: 1rem;">
+    {{ user.email if user else 'Not signed in' }}
+  </p>
+</section>
+
+
+<!-- ====================== PROFILE OVERVIEW ====================== -->
+<section class="section fade-in" style="padding-top: 10px;">
+  <div class="admin-stats">
+    <div class="stat-card">
+      <div class="stat-value">{{ stats.courses_viewed if stats else 0 }}</div>
+      <div class="stat-label">Courses Viewed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ stats.events if stats else 0 }}</div>
+      <div class="stat-label">Actions Tracked</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ stats.recommendations if stats else 0 }}</div>
+      <div class="stat-label">Recommendations</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color: var(--cyan);">
+        {{ user_profile.skill_level if user_profile and user_profile.skill_level else '—' }}
+      </div>
+      <div class="stat-label">Detected Level</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== CURRENT UNDERSTANDING ====================== -->
+<section class="section fade-in" style="padding-top: 10px;">
+  <div class="section-header">
+    <h2 class="section-title">What AURA Understands About You</h2>
+  </div>
+
+  <div class="rec-side-card">
+    <div class="rec-label">
+      <span class="dot"></span>
+      Living Profile
+    </div>
+
+    {% if user_profile %}
+      <div style="display: grid; gap: 18px; margin-top: 8px;">
+        <div>
+          <div class="text-dim" style="font-size: 0.72rem; font-family: var(--font-mono); margin-bottom: 6px;">
+            INTERESTS
+          </div>
+          <div class="rec-chips">
+            {% if user_profile.interests %}
+              {% for interest in user_profile.interests %}
+                <span class="rec-chip">{{ interest }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="text-muted" style="font-size: 0.9rem;">Still learning your interests…</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 40px; flex-wrap: wrap;">
+          <div>
+            <div class="text-dim" style="font-size: 0.72rem; font-family: var(--font-mono); margin-bottom: 4px;">
+              SKILL LEVEL
+            </div>
+            <div style="font-size: 1.05rem;">
+              {{ user_profile.skill_level or 'Not detected yet' }}
+            </div>
+          </div>
+
+          <div>
+            <div class="text-dim" style="font-size: 0.72rem; font-family: var(--font-mono); margin-bottom: 4px;">
+              CURRENT INTENT
+            </div>
+            <div style="font-size: 1.05rem;">
+              {{ user_profile.intent or 'Exploring' }}
+            </div>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <p class="text-muted" style="font-size: 0.95rem; line-height: 1.65;">
+        AURA has not built a profile for you yet. Explore a few courses and interact with the platform —
+        the agent will start understanding your interests automatically.
+      </p>
+    {% endif %}
+  </div>
+</section>
+
+
+<!-- ====================== LATEST RECOMMENDATION ====================== -->
+<section class="section fade-in" style="padding-top: 10px;">
+  <div class="section-header">
+    <h2 class="section-title">Latest Recommendation</h2>
+    <a href="/dashboard" class="section-link">Go to Dashboard →</a>
+  </div>
+
+  <div class="rec-side-card">
+    {% if recommendation and recommendation.narrative %}
+      <div class="rec-label">
+        <span class="dot pulse-ring"></span>
+        Active Recommendation
+      </div>
+      <div class="rec-narrative" id="narrativeContent">
+        {{ recommendation.narrative }}
+      </div>
+
+      {% if recommendation.product_ids %}
+      <div class="rec-chips">
+        {% for pid in recommendation.product_ids[:4] %}
+          <a href="/course/{{ pid }}" class="rec-chip">Open Course</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% else %}
+      <p class="text-muted" style="font-size: 0.95rem;">
+        No recommendation generated yet. Visit the dashboard and click
+        “Refresh Recommendations” after exploring some courses.
+      </p>
+    {% endif %}
+  </div>
+</section>
+
+
+<!-- ====================== RECENT ACTIVITY ====================== -->
+<section class="section fade-in" style="padding-top: 10px; padding-bottom: 90px;">
+  <div class="section-header">
+    <h2 class="section-title">Recent Activity</h2>
+  </div>
+
+  {% if recent_events %}
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      {% for event in recent_events[:8] %}
+      <div class="stat-card" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px;">
+        <div>
+          <div style="font-size: 0.95rem; font-weight: 500;">
+            {{ event.event_type.replace('_', ' ').title() }}
+          </div>
+          <div class="text-dim" style="font-size: 0.8rem; margin-top: 2px;">
+            {% if event.payload_json %}
+              {{ event.payload_json.get('title') or event.payload_json.get('url') or event.payload_json.get('category') or '—' }}
+            {% else %}
+              —
+            {% endif %}
+          </div>
+        </div>
+        <div class="text-dim" style="font-size: 0.78rem; font-family: var(--font-mono);">
+          {{ event.created_at.strftime('%b %d, %H:%M') if event.created_at else '' }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="rec-side-card">
+      <p class="text-muted" style="font-size: 0.95rem;">
+        No activity recorded yet. Start exploring courses and your actions will appear here.
+      </p>
+    </div>
+  {% endif %}
+</section>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+  // Render markdown narrative if present
+  const narrativeEl = document.getElementById('narrativeContent');
+  if (narrativeEl && typeof marked !== 'undefined') {
+    narrativeEl.innerHTML = marked.parse(narrativeEl.textContent);
+  }
+</script>
+{% endblock %}

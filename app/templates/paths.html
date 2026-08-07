@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Learning Paths{% endblock %}
+
+{% block content %}
+
+<!-- ====================== HERO ====================== -->
+<section class="section fade-in" style="padding-top: 130px; padding-bottom: 20px;">
+  <div class="hero-badge" style="margin-bottom: 20px;">
+    Curated Roadmaps
+  </div>
+
+  <h1 class="section-title" style="font-size: clamp(2.2rem, 4.5vw, 3rem); margin-bottom: 14px;">
+    Learning Paths
+  </h1>
+
+  <p class="text-muted" style="max-width: 540px; font-size: 1.05rem; line-height: 1.7;">
+    Structured sequences of courses designed to take you from foundation to mastery.
+    AURA uses these paths to better understand your long-term goals.
+  </p>
+</section>
+
+
+<!-- ====================== PATHS GRID ====================== -->
+<section class="section fade-in" style="padding-top: 30px;">
+  <div class="course-grid stagger" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+
+    <!-- Path 1 -->
+    <a href="/catalog?category=AI+%26+Agents" class="course-card fade-in" style="min-height: 220px;">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Advanced</span>
+        <span class="badge">12 courses</span>
+      </div>
+      <div class="course-title" style="font-size: 1.2rem;">AI Engineer</div>
+      <div class="course-desc">
+        Master agents, LangGraph, RAG systems, and production AI engineering practices.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">9–12 months</span>
+        <span class="text-cyan" style="font-size: 0.8rem;">Explore →</span>
+      </div>
+    </a>
+
+    <!-- Path 2 -->
+    <a href="/catalog?category=AI+%26+Machine+Learning" class="course-card fade-in" style="min-height: 220px;">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Intermediate</span>
+        <span class="badge">10 courses</span>
+      </div>
+      <div class="course-title" style="font-size: 1.2rem;">Machine Learning Engineer</div>
+      <div class="course-desc">
+        From classical ML to deep learning, model deployment, and MLOps fundamentals.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">8–11 months</span>
+        <span class="text-cyan" style="font-size: 0.8rem;">Explore →</span>
+      </div>
+    </a>
+
+    <!-- Path 3 -->
+    <a href="/catalog?category=Web+Dev" class="course-card fade-in" style="min-height: 220px;">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Intermediate</span>
+        <span class="badge">11 courses</span>
+      </div>
+      <div class="course-title" style="font-size: 1.2rem;">Full Stack Developer</div>
+      <div class="course-desc">
+        Modern frontend, backend APIs, databases, and deployment for real-world products.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">7–10 months</span>
+        <span class="text-cyan" style="font-size: 0.8rem;">Explore →</span>
+      </div>
+    </a>
+
+    <!-- Path 4 -->
+    <a href="/catalog?category=Python+%26+Data" class="course-card fade-in" style="min-height: 220px;">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Beginner</span>
+        <span class="badge">9 courses</span>
+      </div>
+      <div class="course-title" style="font-size: 1.2rem;">Data Scientist</div>
+      <div class="course-desc">
+        Data analysis, visualization, statistical thinking, and applied machine learning.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">6–9 months</span>
+        <span class="text-cyan" style="font-size: 0.8rem;">Explore →</span>
+      </div>
+    </a>
+
+    <!-- Path 5 -->
+    <a href="/catalog" class="course-card fade-in" style="min-height: 220px;">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Advanced</span>
+        <span class="badge">8 courses</span>
+      </div>
+      <div class="course-title" style="font-size: 1.2rem;">MLOps & Cloud</div>
+      <div class="course-desc">
+        Model serving, monitoring, CI/CD for ML, and cloud infrastructure for AI systems.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">6–8 months</span>
+        <span class="text-cyan" style="font-size: 0.8rem;">Explore →</span>
+      </div>
+    </a>
+
+    <!-- Path 6 -->
+    <a href="/catalog" class="course-card fade-in" style="min-height: 220px;">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Intermediate</span>
+        <span class="badge">7 courses</span>
+      </div>
+      <div class="course-title" style="font-size: 1.2rem;">Backend & APIs</div>
+      <div class="course-desc">
+        Design robust APIs, authentication, databases, and scalable service architecture.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">5–8 months</span>
+        <span class="text-cyan" style="font-size: 0.8rem;">Explore →</span>
+      </div>
+    </a>
+
+  </div>
+</section>
+
+
+<!-- ====================== NOTE ====================== -->
+<section class="section fade-in" style="padding-top: 10px; padding-bottom: 90px;">
+  <div class="rec-side-card" style="text-align: center; padding: 36px 28px;">
+    <h3 style="font-family: var(--font-display); font-size: 1.4rem; font-weight: 400; margin-bottom: 10px;">
+      Paths help AURA understand you better
+    </h3>
+    <p class="text-muted" style="max-width: 520px; margin: 0 auto 24px; font-size: 0.95rem;">
+      When you explore courses inside a path, the agent treats it as a strong signal of your long-term goal
+      and adjusts recommendations accordingly.
+    </p>
+    <a href="/catalog" class="btn btn-outline">Browse All Courses</a>
+  </div>
+</section>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+  // Track path clicks
+  document.querySelectorAll('.course-card').forEach(card => {
+    card.addEventListener('click', () => {
+      if (window.SmartTracker) {
+        SmartTracker.track('path_click', {
+          title: card.querySelector('.course-title')?.textContent || 'unknown',
+          source: 'paths_page'
+        });
+      }
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+
+<!-- ====================== DASHBOARD HERO ====================== -->
+<section class="hero fade-in" style="padding-bottom: 40px;">
+  <!-- Left: Welcome + Recommendation -->
+  <div>
+    <div class="hero-badge">
+      <span class="dot" style="width:6px;height:6px;background:var(--cyan);border-radius:50%;display:inline-block;"></span>
+      Your Learning Hub
+    </div>
+
+    <h1 style="font-size: clamp(2rem, 4vw, 2.8rem);">
+      Welcome back{% if user %}, {{ user.email.split('@')[0] }}{% endif %}
+    </h1>
+
+    <p class="hero-sub">
+      AURA continues to learn from your activity and refine recommendations for you.
+    </p>
+
+    <div class="hero-actions">
+      <button class="btn btn-cyan btn-lg" id="refreshBtn" onclick="refreshRecs()">
+        Refresh Recommendations
+      </button>
+      <a href="/catalog" class="btn btn-outline btn-lg">Browse Courses</a>
+    </div>
+  </div>
+
+  <!-- Right: Live Recommendation Card -->
+  <div class="rec-side-card glow-cyan">
+    <div class="rec-label">
+      <span class="dot pulse-ring"></span>
+      AURA Recommendation
+    </div>
+
+    <div class="rec-narrative" id="recNarrative">
+      {% if recommendation and recommendation.narrative %}
+        <div id="narrativeContent">{{ recommendation.narrative }}</div>
+      {% else %}
+        <p class="text-muted" style="font-size: 0.9rem; line-height: 1.65;">
+          Start exploring courses. AURA will analyze your behavior and generate
+          a personalized recommendation here.
+        </p>
+      {% endif %}
+    </div>
+
+    {% if recommendation and recommendation.product_ids %}
+    <div class="rec-chips">
+      {% for pid in recommendation.product_ids[:4] %}
+        <a href="/course/{{ pid }}" class="rec-chip">View Course</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+
+<!-- ====================== QUICK STATS ====================== -->
+<section class="section fade-in" style="padding-top: 10px; padding-bottom: 30px;">
+  <div class="admin-stats">
+    <div class="stat-card">
+      <div class="stat-value" id="statCourses">{{ stats.courses_viewed if stats else 0 }}</div>
+      <div class="stat-label">Courses Viewed</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ stats.recommendations if stats else 0 }}</div>
+      <div class="stat-label">Recommendations</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ stats.events if stats else 0 }}</div>
+      <div class="stat-label">Actions Tracked</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" style="color: var(--cyan);">Live</div>
+      <div class="stat-label">Agent Status</div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ====================== CONTINUE LEARNING ====================== -->
+<section class="section fade-in" style="padding-top: 10px;">
+  <div class="section-header">
+    <h2 class="section-title">Continue Learning</h2>
+    <a href="/catalog" class="section-link">View all →</a>
+  </div>
+
+  <div class="course-grid stagger">
+    {% for course in courses[:4] %}
+    <a href="/course/{{ course.id }}"
+       class="course-card fade-in"
+       data-course-id="{{ course.id }}"
+       data-course-title="{{ course.title }}">
+      <div class="course-meta">
+        <span class="badge badge-cyan">{{ course.category }}</span>
+        <span class="badge">{{ course.level }}</span>
+      </div>
+      <div class="course-title">{{ course.title }}</div>
+      <div class="course-desc">
+        {{ course.description[:120] }}{% if course.description|length > 120 %}…{% endif %}
+      </div>
+      <div class="course-footer">
+        <span class="course-price">
+          {% if course.price %}${{ '%.0f'|format(course.price) }}{% else %}Free{% endif %}
+        </span>
+        <span class="course-level">{{ course.level }}</span>
+      </div>
+    </a>
+    {% else %}
+    <p class="text-muted">No courses available yet. Explore the catalog to get started.</p>
+    {% endfor %}
+  </div>
+</section>
+
+
+<!-- ====================== QUICK ACTIONS ====================== -->
+<section class="section fade-in" style="padding-top: 0; padding-bottom: 80px;">
+  <div class="section-header">
+    <h2 class="section-title">Quick Actions</h2>
+  </div>
+
+  <div class="steps">
+    <a href="/catalog" class="step-card fade-in" style="text-decoration: none;">
+      <div class="step-num">01</div>
+      <h3>Explore Catalog</h3>
+      <p>Browse all available courses and let AURA learn from your interests.</p>
+    </a>
+
+    <a href="/paths" class="step-card fade-in" style="text-decoration: none;">
+      <div class="step-num">02</div>
+      <h3>Learning Paths</h3>
+      <p>Discover curated paths designed for different career goals.</p>
+    </a>
+
+    <a href="/profile" class="step-card fade-in" style="text-decoration: none;">
+      <div class="step-num">03</div>
+      <h3>Your Profile</h3>
+      <p>View your activity history and how AURA understands you.</p>
+    </a>
+  </div>
+</section>
+
+{% endblock %}
+
+
+{% block scripts %}
+<script>
+  // Render markdown narrative if present
+  const narrativeEl = document.getElementById('narrativeContent');
+  if (narrativeEl && typeof marked !== 'undefined') {
+    narrativeEl.innerHTML = marked.parse(narrativeEl.textContent);
+  }
+
+  // Refresh recommendations
+  async function refreshRecs() {
+    const btn = document.getElementById('refreshBtn');
+    if (btn) {
+      btn.textContent = 'Analyzing…';
+      btn.disabled = true;
+    }
+
+    try {
+      const res = await fetch('/api/recommendations/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (res.ok) {
+        location.reload();
+      } else {
+        alert('Could not refresh right now. Try exploring more courses first.');
+      }
+    } catch (err) {
+      alert('Something went wrong while refreshing recommendations.');
+    } finally {
+      if (btn) {
+        btn.textContent = 'Refresh Recommendations';
+        btn.disabled = false;
+      }
+    }
+  }
+
+  // Track course clicks
+  document.querySelectorAll('.course-card').forEach(card => {
+    card.addEventListener('click', () => {
+      if (window.SmartTracker) {
+        SmartTracker.track('course_click', {
+          course_id: parseInt(card.dataset.courseId),
+          title: card.dataset.courseTitle,
+          source: 'dashboard'
+        });
+      }
+    });
+  });
+</script>
+{% endblock %}
