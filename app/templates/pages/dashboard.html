@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<section class="hero dashboard-hero fade-in">
+  <div>
+    <div class="hero-badge">
+      <span class="dot pulse-ring" style="width:6px;height:6px;border-radius:50%;background:var(--cyan);display:inline-block;"></span>
+      Your Learning Hub
+    </div>
+
+    <h1 style="font-size: clamp(2rem, 4vw, 2.8rem);">
+      Welcome back{% if user and user.email %}, {{ user.email.split('@')[0] }}{% endif %}
+    </h1>
+
+    <p class="hero-sub">
+      AURA continues to learn from your activity and refine recommendations for you.
+    </p>
+
+    <div class="hero-actions">
+      <button type="button" class="btn btn-cyan btn-lg" id="refreshBtn">
+        Refresh Recommendations
+      </button>
+      <a href="/catalog" class="btn btn-outline btn-lg">Browse Courses</a>
+    </div>
+  </div>
+
+  <div>
+    {% with recommendation=recommendation, card_class='glow-cyan' %}
+      {% include "components/recommendation_card.html" %}
+    {% endwith %}
+  </div>
+</section>
+
+<section class="section dashboard-stats fade-in" style="padding-top:10px; padding-bottom:30px;">
+  <div class="admin-stats stagger">
+    <div class="stat-card fade-in">
+      <div class="stat-value">{{ stats.courses_viewed if stats else 0 }}</div>
+      <div class="stat-label">Courses Viewed</div>
+    </div>
+    <div class="stat-card fade-in">
+      <div class="stat-value">{{ stats.recommendations if stats else 0 }}</div>
+      <div class="stat-label">Recommendations</div>
+    </div>
+    <div class="stat-card fade-in">
+      <div class="stat-value">{{ stats.events if stats else 0 }}</div>
+      <div class="stat-label">Actions Tracked</div>
+    </div>
+    <div class="stat-card fade-in">
+      <div class="stat-value status-live">Live</div>
+      <div class="stat-label">Agent Status</div>
+    </div>
+  </div>
+</section>
+
+<section class="section dashboard-continue fade-in" style="padding-top:10px;">
+  <div class="section-header">
+    <h2 class="section-title">Continue Learning</h2>
+    <a href="/catalog" class="section-link">View all →</a>
+  </div>
+
+  <div class="course-grid stagger">
+    {% for course in courses[:4] %}
+      {% with course=course, source='dashboard' %}
+        {% include "components/course_card.html" %}
+      {% endwith %}
+    {% else %}
+      <p class="text-muted">No courses available yet.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/pages/dashboard.js"></script>
+{% endblock %}

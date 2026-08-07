@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}How AURA Works{% endblock %}
+
+{% block content %}
+<section class="section about-page fade-in">
+  <div class="about-intro">
+    <div class="hero-badge" style="margin-bottom:20px;">Powered by Mesh API · LangGraph</div>
+    <h1 class="section-title" style="font-size: clamp(2.2rem, 4.5vw, 3rem); margin-bottom:16px;">
+      How AURA Works
+    </h1>
+    <p>
+      AURA is not a simple related-products widget. It is an agentic system that
+      continuously observes your behavior, reasons over it, and generates
+      personalized course recommendations grounded in the real catalog.
+    </p>
+  </div>
+
+  <div class="about-loop">
+    <div class="section-header">
+      <h2 class="section-title">The Agent Loop</h2>
+    </div>
+    <div class="steps stagger">
+      <div class="step-card fade-in">
+        <div class="step-num">01</div>
+        <h3>Observe</h3>
+        <p>
+          Page views, searches, clicks, and time spent are tracked in a non-blocking
+          way and stored as behavioral events.
+        </p>
+      </div>
+      <div class="step-card fade-in">
+        <div class="step-num">02</div>
+        <h3>Understand</h3>
+        <p>
+          The LangGraph agent infers interests, skill level, and intent, then builds
+          a living profile that updates as you explore.
+        </p>
+      </div>
+      <div class="step-card fade-in">
+        <div class="step-num">03</div>
+        <h3>Retrieve</h3>
+        <p>
+          Semantic search over the vector catalog returns grounded candidates —
+          not invented courses.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-header">
+    <h2 class="section-title">Why it feels personal</h2>
+  </div>
+  <div class="course-grid stagger" style="margin-bottom:64px;">
+    <div class="step-card fade-in">
+      <div class="step-num">Triggers</div>
+      <h3>Smart when to call AI</h3>
+      <p>High-intent actions, search bursts, staleness, and cooldowns avoid wasteful LLM calls on every click.</p>
+    </div>
+    <div class="step-card fade-in">
+      <div class="step-num">Dual-write</div>
+      <h3>Catalog stays searchable</h3>
+      <p>Every product is written to SQL and the vector store together so recommendations stay in sync.</p>
+    </div>
+    <div class="step-card fade-in">
+      <div class="step-num">Persuasion</div>
+      <h3>Narrative, not a bare list</h3>
+      <p>A short AIDA-style story explains why these courses fit your journey, then links the products.</p>
+    </div>
+  </div>
+
+  <div class="landing-cta-band">
+    <div class="rec-side-card">
+      <h2 class="section-title" style="margin-bottom:12px;">See it on your dashboard</h2>
+      <p class="text-muted" style="margin-bottom:24px;">
+        Sign in, explore a few courses, then refresh recommendations.
+      </p>
+      <a href="{% if user %}/dashboard{% else %}/register{% endif %}" class="btn btn-cyan btn-lg">
+        {% if user %}Open Dashboard{% else %}Get Started{% endif %}
+      </a>
+    </div>
+  </div>
+</section>
+{% endblock %}

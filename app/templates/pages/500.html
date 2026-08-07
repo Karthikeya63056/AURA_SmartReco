@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Something went wrong{% endblock %}
+
+{% block content %}
+<div class="error-page fade-in">
+  <div class="code">500</div>
+  <h1>Something went wrong</h1>
+  <p class="text-muted">
+    An unexpected error occurred. Try again in a moment.
+  </p>
+  <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
+    <a href="/" class="btn btn-cyan">Go home</a>
+    <a href="/dashboard" class="btn btn-outline">Dashboard</a>
+  </div>
+</div>
+{% endblock %}

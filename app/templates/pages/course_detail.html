@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ course.title }}{% endblock %}
+
+{% block content %}
+<section class="detail fade-in"
+         id="courseDetail"
+         data-course-id="{{ course.id }}"
+         data-course-title="{{ course.title }}">
+
+  <div class="course-meta" style="margin-bottom:8px;">
+    <span class="badge badge-cyan">{{ course.category }}</span>
+    <span class="badge">{{ course.level }}</span>
+  </div>
+
+  <h1>{{ course.title }}</h1>
+
+  <p class="detail-desc">{{ course.description }}</p>
+
+  <div class="detail-actions">
+    <button type="button" class="btn btn-cyan btn-lg" id="interestBtn">I'm Interested</button>
+    <a href="/catalog" class="btn btn-outline btn-lg">Back to Catalog</a>
+  </div>
+
+  <div class="detail-meta-row">
+    <div class="detail-meta-item">
+      <div class="label">Price</div>
+      <div class="value price">
+        {% if course.price and course.price > 0 %}
+          ${{ '%.0f'|format(course.price) }}
+        {% else %}
+          Free
+        {% endif %}
+      </div>
+    </div>
+    <div class="detail-meta-item">
+      <div class="label">Level</div>
+      <div class="value">{{ course.level }}</div>
+    </div>
+    {% if course.rating is defined and course.rating is not none %}
+    <div class="detail-meta-item">
+      <div class="label">Rating</div>
+      <div class="value">{{ '%.1f'|format(course.rating) }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if course.syllabus %}
+  <div class="syllabus-list" style="margin-top:40px;">
+    <h2 class="section-title" style="margin-bottom:16px;">Syllabus</h2>
+    {% for item in course.syllabus %}
+    <div class="syllabus-item" data-track-action="syllabus_view" data-course-id="{{ course.id }}">
+      <span class="idx">{{ '%02d'|format(loop.index) }}</span>
+      <span>{{ item if item is string else item.title | default(item) }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/pages/course.js"></script>
+{% endblock %}

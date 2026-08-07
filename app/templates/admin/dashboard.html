@@ -1,84 +1,99 @@
 {% extends "base.html" %}
-
-{% block title %}Admin Dashboard — SmartReco 2026{% endblock %}
+{% block title %}Admin · Dashboard{% endblock %}
 
 {% block content %}
-<div class="space-y-8">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-            <h1 class="text-3xl font-extrabold tracking-tight text-slate-100 flex items-center space-x-3">
-                <i class="fa-solid fa-shield-halved text-amber-400"></i>
-                <span>Admin Command Center</span>
-            </h1>
-            <p class="text-slate-400 text-sm">Monitor system metrics, run manual daily digests, inspect agent traces, and manage course dual-writes.</p>
-        </div>
-        <div class="flex items-center space-x-3">
-            <a href="/admin/products" class="bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 px-4 py-2.5 rounded-xl border border-slate-700 transition-all flex items-center space-x-2">
-                <i class="fa-solid fa-boxes-stacked text-cyan-400"></i>
-                <span>Manage Course Catalog</span>
-            </a>
-            <button onclick="runDigestNow()" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-extrabold text-xs px-4 py-2.5 rounded-xl shadow-lg transition-all flex items-center space-x-2">
-                <i class="fa-solid fa-paper-plane"></i>
-                <span>Run Digest Now</span>
-            </button>
-        </div>
+<section class="admin-page fade-in">
+  <div class="section-header" style="padding-inline:0;">
+    <h1 class="section-title">Admin Dashboard</h1>
+    <a href="/admin/products" class="section-link">Manage products →</a>
+  </div>
+
+  <div class="admin-stats stagger" style="margin-bottom: var(--space-10);">
+    <div class="stat-card fade-in">
+      <div class="stat-value">{{ product_count | default(0) }}</div>
+      <div class="stat-label">Products</div>
     </div>
-
-    <!-- Stats Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-        <div class="glass-panel rounded-xl p-5 border border-slate-800 space-y-2">
-            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Courses</span>
-            <div class="text-3xl font-extrabold text-slate-100">{{ product_count }}</div>
-            <p class="text-[11px] text-cyan-400">Dual-written to SQLite + Chroma</p>
-        </div>
-        <div class="glass-panel rounded-xl p-5 border border-slate-800 space-y-2">
-            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Tracked Events</span>
-            <div class="text-3xl font-extrabold text-slate-100">{{ event_count }}</div>
-            <p class="text-[11px] text-indigo-400">Ingested via non-blocking batch</p>
-        </div>
-        <div class="glass-panel rounded-xl p-5 border border-slate-800 space-y-2">
-            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Recommendations</span>
-            <div class="text-3xl font-extrabold text-slate-100">{{ rec_count }}</div>
-            <p class="text-[11px] text-emerald-400">LangGraph state evaluations</p>
-        </div>
-        <div class="glass-panel rounded-xl p-5 border border-slate-800 space-y-2">
-            <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Mesh API Gateway</span>
-            <div class="text-3xl font-extrabold text-amber-400">100%</div>
-            <p class="text-[11px] text-slate-400">LLM & Embedding Compliance</p>
-        </div>
+    <div class="stat-card fade-in">
+      <div class="stat-value">{{ event_count | default(0) }}</div>
+      <div class="stat-label">Events</div>
     </div>
-
-    <!-- Quick User Agent Trace Lookup -->
-    <div class="glass-panel rounded-2xl p-6 border border-slate-800 space-y-4">
-        <h2 class="text-xl font-bold text-slate-100 flex items-center space-x-2">
-            <i class="fa-solid fa-magnifying-glass text-cyan-400"></i>
-            <span>Inspect User Agent State Trace</span>
-        </h2>
-        <div class="flex items-center space-x-4 max-w-md">
-            <input type="number" id="trace-user-id" value="2" placeholder="User ID" class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500 w-32">
-            <button onclick="viewTrace()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl transition-all">
-                View Trace Log
-            </button>
-        </div>
+    <div class="stat-card fade-in">
+      <div class="stat-value">{{ rec_count | default(0) }}</div>
+      <div class="stat-label">Recommendations</div>
     </div>
-</div>
-{% endblock %}
+    <div class="stat-card fade-in">
+      <div class="stat-value" style="color: var(--cyan);">Live</div>
+      <div class="stat-label">System</div>
+    </div>
+  </div>
 
-{% block scripts %}
-<script>
-    async function runDigestNow() {
-        try {
-            const res = await fetch('/admin/run-digest-now', { method: 'POST' });
-            const data = await res.json();
-            alert(`Daily Digest Triggered! Processed ${data.processed} active users.`);
-        } catch (err) {
-            alert('Failed to trigger daily digest: ' + err.message);
-        }
-    }
+  <div class="section-header" style="padding-inline:0;">
+    <h2 class="section-title">Quick actions</h2>
+  </div>
 
-    function viewTrace() {
-        const uid = document.getElementById('trace-user-id').value;
-        window.location.href = `/admin/trace/${uid}`;
-    }
-</script>
+  <div class="course-grid" style="margin-bottom: var(--space-12);">
+    <a href="/admin/products" class="course-card fade-in">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Catalog</span>
+      </div>
+      <div class="course-title">Manage products</div>
+      <div class="course-desc">
+        Add, edit, or delete courses. Dual-write keeps SQLite and the vector store in sync.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">Dual-write enabled</span>
+        <span class="text-cyan text-sm">Open →</span>
+      </div>
+    </a>
+
+    <a href="/catalog" class="course-card fade-in">
+      <div class="course-meta">
+        <span class="badge">Public</span>
+      </div>
+      <div class="course-title">View catalog</div>
+      <div class="course-desc">
+        Preview the learner-facing course grid and filters.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">Learner UI</span>
+        <span class="text-cyan text-sm">Open →</span>
+      </div>
+    </a>
+
+    <a href="/about" class="course-card fade-in">
+      <div class="course-meta">
+        <span class="badge badge-violet">Agent</span>
+      </div>
+      <div class="course-title">How AURA works</div>
+      <div class="course-desc">
+        Explain the observe → understand → recommend loop to stakeholders.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">Docs</span>
+        <span class="text-cyan text-sm">Open →</span>
+      </div>
+    </a>
+  </div>
+
+  {% if recent_events is defined and recent_events %}
+  <div class="section-header" style="padding-inline:0;">
+    <h2 class="section-title">Recent platform events</h2>
+  </div>
+  <div class="activity-list">
+    {% for event in recent_events[:10] %}
+    <div class="activity-item">
+      <div>
+        <div class="event-type">{{ event.event_type }}</div>
+        <div class="text-dim text-xs" style="margin-top:4px;">
+          user #{{ event.user_id }} · session {{ event.session_id[:12] if event.session_id else '—' }}…
+        </div>
+      </div>
+      <div class="event-time">
+        {% if event.created_at %}{{ event.created_at.strftime('%b %d, %H:%M') }}{% else %}—{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
 {% endblock %}

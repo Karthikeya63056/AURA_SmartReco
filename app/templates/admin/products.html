@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+{% block title %}Admin · Products{% endblock %}
+
+{% block content %}
+<section class="admin-page fade-in">
+  <div class="admin-toolbar">
+    <div>
+      <h1 class="section-title" style="margin-bottom:4px;">Product catalog</h1>
+      <p class="text-muted text-sm">Dual-write to SQLite + vector store on every change.</p>
+    </div>
+    <div class="admin-actions">
+      <a href="/admin/dashboard" class="btn btn-ghost btn-sm">← Dashboard</a>
+      <button type="button" class="btn btn-cyan btn-sm" id="toggleCreateForm">
+        + Add product
+      </button>
+    </div>
+  </div>
+
+  <!-- Create / edit panel -->
+  <div class="admin-form-panel" id="productFormPanel" hidden>
+    <h3 id="formTitle">Add product</h3>
+    <form id="productForm">
+      <input type="hidden" id="productId" name="id" value="">
+
+      <div class="form-group">
+        <label for="title">Title</label>
+        <input type="text" id="title" name="title" required placeholder="e.g. Agentic AI with LangGraph">
+      </div>
+
+      <div class="form-group">
+        <label for="category">Category</label>
+        <input type="text" id="category" name="category" required placeholder="e.g. AI & Agents">
+      </div>
+
+      <div class="form-group">
+        <label for="level">Level</label>
+        <select id="level" name="level" required>
+          <option value="Beginner">Beginner</option>
+          <option value="Intermediate" selected>Intermediate</option>
+          <option value="Advanced">Advanced</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="price">Price</label>
+        <input type="number" id="price" name="price" min="0" step="0.01" value="0" required>
+      </div>
+
+      <div class="form-group">
+        <label for="rating">Rating</label>
+        <input type="number" id="rating" name="rating" min="0" max="5" step="0.1" value="4.5">
+      </div>
+
+      <div class="form-group">
+        <label for="description">Description</label>
+        <textarea id="description" name="description" rows="4" required placeholder="What learners will gain…"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="tags">Tags (comma-separated)</label>
+        <input type="text" id="tags" name="tags" placeholder="python, langgraph, agents">
+      </div>
+
+      <div class="form-group" style="flex-direction:row; gap:24px; align-items:center;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="is_popular" name="is_popular"> Popular
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="is_trending" name="is_trending"> Trending
+        </label>
+      </div>
+
+      <div class="admin-actions" style="margin-top:8px;">
+        <button type="submit" class="btn btn-cyan" id="saveProductBtn">Save product</button>
+        <button type="button" class="btn btn-outline" id="cancelFormBtn">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Product table -->
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Title</th>
+          <th>Category</th>
+          <th>Level</th>
+          <th>Price</th>
+          <th>Flags</th>
+          <th>Reindex</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in products %}
+        <tr data-product-id="{{ p.id }}">
+          <td class="mono">{{ p.id }}</td>
+          <td>
+            <a href="/course/{{ p.id }}" class="text-cyan">{{ p.title }}</a>
+          </td>
+          <td>{{ p.category }}</td>
+          <td>{{ p.level }}</td>
+          <td class="mono">
+            {% if p.price %}${{ '%.0f'|format(p.price) }}{% else %}Free{% endif %}
+          </td>
+          <td>
+            {% if p.is_popular %}<span class="badge badge-cyan">Popular</span>{% endif %}
+            {% if p.is_trending %}<span class="badge badge-violet">Trending</span>{% endif %}
+          </td>
+          <td>
+            {% if p.needs_reindex %}
+              <span class="badge" style="color:var(--warning);border-color:rgba(251,191,36,0.35);">Pending</span>
+            {% else %}
+              <span class="text-dim text-xs">OK</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="admin-actions">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                data-edit-product
+                data-id="{{ p.id }}"
+                data-title="{{ p.title | e }}"
+                data-category="{{ p.category | e }}"
+                data-level="{{ p.level | e }}"
+                data-price="{{ p.price }}"
+                data-rating="{{ p.rating }}"
+                data-description="{{ p.description | e }}"
+                data-tags="{{ (p.tags | join(', ')) if p.tags is iterable and p.tags is not string else '' }}"
+                data-popular="{{ '1' if p.is_popular else '0' }}"
+                data-trending="{{ '1' if p.is_trending else '0' }}"
+              >Edit</button>
+              <button
+                type="button"
+                class="btn btn-danger btn-sm"
+                data-admin-delete
+                data-id="{{ p.id }}"
+                data-title="{{ p.title | e }}"
+              >Delete</button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8">
+            <div class="empty-state" style="padding:48px 16px;">
+              <h3>No products yet</h3>
+              <p>Add your first course or run the seed script.</p>
+              <button type="button" class="btn btn-cyan" id="emptyAddBtn">+ Add product</button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/pages/admin.js"></script>
+<script>
+(function () {
+  const panel = document.getElementById('productFormPanel');
+  const form = document.getElementById('productForm');
+  const formTitle = document.getElementById('formTitle');
+  const toggleBtn = document.getElementById('toggleCreateForm');
+  const cancelBtn = document.getElementById('cancelFormBtn');
+  const emptyAddBtn = document.getElementById('emptyAddBtn');
+
+  function openCreate() {
+    form.reset();
+    document.getElementById('productId').value = '';
+    formTitle.textContent = 'Add product';
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function openEdit(btn) {
+    document.getElementById('productId').value = btn.dataset.id || '';
+    document.getElementById('title').value = btn.dataset.title || '';
+    document.getElementById('category').value = btn.dataset.category || '';
+    document.getElementById('level').value = btn.dataset.level || 'Intermediate';
+    document.getElementById('price').value = btn.dataset.price || '0';
+    document.getElementById('rating').value = btn.dataset.rating || '4.5';
+    document.getElementById('description').value = btn.dataset.description || '';
+    document.getElementById('tags').value = btn.dataset.tags || '';
+    document.getElementById('is_popular').checked = btn.dataset.popular === '1';
+    document.getElementById('is_trending').checked = btn.dataset.trending === '1';
+    formTitle.textContent = 'Edit product #' + (btn.dataset.id || '');
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function closeForm() {
+    panel.hidden = true;
+    form.reset();
+  }
+
+  function parseTags(raw) {
+    return (raw || '')
+      .split(',')
+      .map(function (t) { return t.trim(); })
+      .filter(Boolean);
+  }
+
+  function collectPayload() {
+    return {
+      title: document.getElementById('title').value.trim(),
+      category: document.getElementById('category').value.trim(),
+      level: document.getElementById('level').value,
+      price: parseFloat(document.getElementById('price').value || '0'),
+      rating: parseFloat(document.getElementById('rating').value || '4.5'),
+      description: document.getElementById('description').value.trim(),
+      tags: parseTags(document.getElementById('tags').value),
+      is_popular: document.getElementById('is_popular').checked,
+      is_trending: document.getElementById('is_trending').checked
+    };
+  }
+
+  if (toggleBtn) toggleBtn.addEventListener('click', openCreate);
+  if (emptyAddBtn) emptyAddBtn.addEventListener('click', openCreate);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeForm);
+
+  document.querySelectorAll('[data-edit-product]').forEach(function (btn) {
+    btn.addEventListener('click', function () { openEdit(btn); });
+  });
+
+  document.querySelectorAll('[data-admin-delete]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      const id = btn.dataset.id;
+      const title = btn.dataset.title || 'this product';
+      if (!confirm('Delete "' + title + '"? This cannot be undone.')) return;
+
+      try {
+        const res = await window.AURA_API.del('/api/products/' + id);
+        if (res.ok || res.status === 204) {
+          if (window.AURA_UI) AURA_UI.toast('Product deleted', 'success');
+          window.location.reload();
+        } else {
+          const msg = (res.data && res.data.detail) || 'Delete failed';
+          if (window.AURA_UI) AURA_UI.toast(typeof msg === 'string' ? msg : 'Delete failed', 'error');
+        }
+      } catch (err) {
+        console.error(err);
+        if (window.AURA_UI) AURA_UI.toast('Delete failed', 'error');
+      }
+    });
+  });
+
+  if (form) {
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      const id = document.getElementById('productId').value;
+      const payload = collectPayload();
+      const saveBtn = document.getElementById('saveProductBtn');
+
+      if (window.AURA_UI) AURA_UI.setButtonLoading(saveBtn, true, 'Saving…');
+
+      try {
+        let res;
+        if (id) {
+          res = await window.AURA_API.put('/api/products/' + id, { json: payload });
+        } else {
+          res = await window.AURA_API.post('/api/products', { json: payload });
+        }
+
+        if (res.ok) {
+          if (window.AURA_UI) AURA_UI.toast(id ? 'Product updated' : 'Product created', 'success');
+          window.location.reload();
+        } else {
+          const msg = (res.data && res.data.detail) || 'Save failed';
+          if (window.AURA_UI) AURA_UI.toast(typeof msg === 'string' ? msg : 'Save failed', 'error');
+        }
+      } catch (err) {
+        console.error(err);
+        if (window.AURA_UI) AURA_UI.toast('Save failed', 'error');
+      } finally {
+        if (window.AURA_UI) AURA_UI.setButtonLoading(saveBtn, false);
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

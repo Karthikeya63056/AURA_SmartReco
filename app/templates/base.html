@@ -3,82 +3,88 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AURA — Adaptive User Recommendation Agent. Personalized course recommendations powered by LangGraph and Mesh API.">
   <title>{% block title %}AURA{% endblock %} — Adaptive User Recommendation Agent</title>
-  <link rel="stylesheet" href="/static/css/style.css">
+
+  <!-- Design system -->
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/components.css">
+  <link rel="stylesheet" href="/static/css/pages.css">
+
+  <!-- Markdown for recommendation narratives -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+
   {% block head %}{% endblock %}
 </head>
 <body>
-
-  <!-- Navigation -->
-  <div class="nav-wrapper" id="navWrapper">
-    <nav class="nav">
-      <a href="/" class="nav-logo">AURA <span>TM</span></a>
-
-      <ul class="nav-links">
-        <li><a href="/catalog">Courses</a></li>
-        <li><a href="/catalog">Catalog</a></li>
-        {% if user and user.is_admin %}
-        <li><a href="/admin/dashboard">Admin</a></li>
-        {% endif %}
-      </ul>
-
-      <div class="nav-actions">
-        {% if user %}
-          <span class="text-muted" style="font-size:0.85rem;">{{ user.email.split('@')[0] }}</span>
-          <a href="#" class="btn btn-ghost btn-sm" id="logoutBtn">Sign out</a>
-        {% else %}
-          <a href="/login" class="btn btn-ghost btn-sm">Sign in</a>
-          <a href="/register" class="btn btn-primary btn-sm">Get started</a>
-        {% endif %}
-      </div>
-    </nav>
-  </div>
+  {% include "components/nav.html" %}
 
   <main>
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="footer">
-    <div class="footer-logo">AURA</div>
-    <div class="footer-copy">SmartReco 2026 · Mesh API · LangGraph</div>
-  </footer>
+  {% include "components/footer.html" %}
+  {% include "components/toast.html" %}
 
-  <script src="/static/js/tracker.js"></script>
+  <!-- Core JS (order matters) -->
+  <script src="/static/js/core/api.js"></script>
+  <script src="/static/js/core/auth.js"></script>
+  <script src="/static/js/core/ui.js"></script>
+  <script src="/static/js/tracking/tracker.js"></script>
+
   <script>
-    // Attach JWT to all fetch requests automatically
-    const originalFetch = window.fetch;
-    window.fetch = function (url, options = {}) {
-      const token = localStorage.getItem('access_token');
-      if (token) {
-        options.headers = options.headers || {};
-        if (options.headers instanceof Headers) {
-          options.headers.set('Authorization', 'Bearer ' + token);
-        } else {
-          options.headers['Authorization'] = 'Bearer ' + token;
-        }
+    (function () {
+      // Floating nav on scroll
+      var nav = document.getElementById('navWrapper');
+      if (nav) {
+        window.addEventListener('scroll', function () {
+          nav.classList.toggle('scrolled', window.scrollY > 20);
+        }, { passive: true });
       }
-      return originalFetch(url, options);
-    };
 
-    // Logout handler
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) {
-      logoutBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        localStorage.removeItem('access_token');
-        window.location.href = '/';
-      });
-    }
-
-    // Nav scroll effect
-    const nav = document.getElementById('navWrapper');
-    if (nav) {
-      window.addEventListener('scroll', () => {
-        nav.classList.toggle('scrolled', window.scrollY > 20);
-      });
-    }
+      // Mobile nav toggle (simple: show/hide .nav-links)
+      var toggle = document.getElementById('navToggle');
+      var links = document.querySelector('.nav-links');
+      if (toggle && links) {
+        toggle.addEventListener('click', function () {
+          var open = links.classList.toggle('nav-links-open');
+          toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+          // Inline fallback if CSS for .nav-links-open not added yet
+          if (open) {
+            links.style.display = 'flex';
+            links.style.flexDirection = 'column';
+            links.style.position = 'absolute';
+            links.style.top = '100%';
+            links.style.right = '16px';
+            links.style.left = '16px';
+            links.style.background = 'var(--bg-glass-strong)';
+            links.style.backdropFilter = 'blur(20px)';
+            links.style.border = '1px solid var(--border)';
+            links.style.borderRadius = 'var(--radius)';
+            links.style.padding = '16px';
+            links.style.gap = '12px';
+            links.style.zIndex = '110';
+          } else {
+            links.style.display = '';
+            links.style.flexDirection = '';
+            links.style.position = '';
+            links.style.top = '';
+            links.style.right = '';
+            links.style.left = '';
+            links.style.background = '';
+            links.style.backdropFilter = '';
+            links.style.border = '';
+            links.style.borderRadius = '';
+            links.style.padding = '';
+            links.style.gap = '';
+            links.style.zIndex = '';
+          }
+        });
+      }
+    })();
   </script>
+
   {% block scripts %}{% endblock %}
 </body>
 </html>

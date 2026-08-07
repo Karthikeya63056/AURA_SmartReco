@@ -1,0 +1,134 @@
+/* ============================================================
+   AURA / SmartReco — Design Tokens
+   Single source of truth for color, type, space, motion, depth.
+   Change values here → entire UI updates.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ---------- Color · Surfaces ---------- */
+  --bg:            #050505;
+  --bg-elevated:   #0c0c0e;
+  --bg-card:       #111114;
+  --bg-hover:      #18181c;
+  --bg-glass:      rgba(5, 5, 5, 0.82);
+  --bg-glass-strong: rgba(5, 5, 5, 0.92);
+
+  /* ---------- Color · Borders ---------- */
+  --border:        rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+
+  /* ---------- Color · Text ---------- */
+  --text:          #f0f0f2;
+  --text-muted:    #8b8b96;
+  --text-dim:      #5a5a66;
+  --text-inverse:  #050505;
+
+  /* ---------- Color · Brand ---------- */
+  --cyan:          #22d3ee;
+  --cyan-bright:   #67e8f9;
+  --cyan-soft:     rgba(34, 211, 238, 0.12);
+  --cyan-muted:    rgba(34, 211, 238, 0.08);
+  --cyan-border:   rgba(34, 211, 238, 0.25);
+  --cyan-glow:     rgba(34, 211, 238, 0.18);
+
+  /* ---------- Color · Semantic ---------- */
+  --success:       #34d399;
+  --success-soft:  rgba(52, 211, 153, 0.12);
+  --warning:       #fbbf24;
+  --warning-soft:  rgba(251, 191, 36, 0.12);
+  --danger:        #f87171;
+  --danger-soft:   rgba(248, 113, 113, 0.12);
+  --violet:        #a78bfa;
+  --violet-soft:   rgba(167, 139, 250, 0.12);
+
+  /* ---------- Typography ---------- */
+  --font-sans:     'Instrument Sans', system-ui, -apple-system, sans-serif;
+  --font-display:  'Instrument Serif', Georgia, 'Times New Roman', serif;
+  --font-mono:     'JetBrains Mono', ui-monospace, monospace;
+
+  --text-xs:       0.75rem;
+  --text-sm:       0.875rem;
+  --text-base:     1rem;
+  --text-lg:       1.125rem;
+  --text-xl:       1.25rem;
+  --text-2xl:      1.5rem;
+  --text-3xl:      1.875rem;
+  --text-4xl:      2.25rem;
+  --text-5xl:      3rem;
+  --text-hero:     clamp(2.25rem, 5vw, 3.25rem);
+
+  --leading-tight:  1.2;
+  --leading-snug:   1.35;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
+
+  --tracking-tight:  -0.02em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.04em;
+  --tracking-mono:    0.02em;
+
+  /* ---------- Spacing (4px grid) ---------- */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-7:   28px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
+  --space-20:  80px;
+  --space-24:  96px;
+
+  /* ---------- Radii ---------- */
+  --radius-sm:  8px;
+  --radius:     12px;
+  --radius-md:  14px;
+  --radius-lg:  16px;
+  --radius-xl:  20px;
+  --radius-full: 999px;
+
+  /* ---------- Shadows & glow ---------- */
+  --shadow-sm:   0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-md:   0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg:   0 12px 40px rgba(0, 0, 0, 0.45);
+  --shadow-nav:  0 8px 32px rgba(0, 0, 0, 0.45);
+  --glow-cyan:   0 0 24px var(--cyan-glow);
+  --glow-cyan-lg: 0 0 40px var(--cyan-glow);
+
+  /* ---------- Layout ---------- */
+  --max-width:     1120px;
+  --max-width-sm:  640px;
+  --max-width-md:  800px;
+  --nav-height:    68px;
+  --nav-height-scrolled: 54px;
+  --section-pad-y: clamp(48px, 8vw, 96px);
+  --section-pad-x: clamp(20px, 4vw, 28px);
+
+  /* ---------- Motion ---------- */
+  --ease-out:    cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast:   150ms;
+  --duration:        250ms;
+  --duration-slow:   400ms;
+  --duration-slower: 600ms;
+
+  /* ---------- Z-index scale ---------- */
+  --z-base:    1;
+  --z-dropdown: 50;
+  --z-sticky:  100;
+  --z-overlay: 200;
+  --z-modal:   300;
+  --z-toast:   400;
+}
+
+/* Optional: slightly softer surfaces if you ever add a light mode later
+@media (prefers-color-scheme: light) {
+  :root { ... }
+}
+*/

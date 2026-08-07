@@ -1,0 +1,34 @@
+{#
+  Expects: course (Product-like object)
+  Optional: source (string) — for analytics context in data attrs
+#}
+<a href="/course/{{ course.id }}"
+   class="course-card fade-in"
+   data-course-id="{{ course.id }}"
+   data-course-title="{{ course.title }}"
+   data-category="{{ course.category }}"
+   {% if source is defined %}data-source="{{ source }}"{% endif %}>
+  <div class="course-meta">
+    <span class="badge badge-cyan">{{ course.category }}</span>
+    <span class="badge">{{ course.level }}</span>
+  </div>
+
+  <div class="course-title">{{ course.title }}</div>
+
+  <div class="course-desc">
+    {% if course.description %}
+      {{ course.description[:130] }}{% if course.description|length > 130 %}…{% endif %}
+    {% endif %}
+  </div>
+
+  <div class="course-footer">
+    <span class="course-price">
+      {% if course.price and course.price > 0 %}
+        ${{ '%.0f'|format(course.price) }}
+      {% else %}
+        Free
+      {% endif %}
+    </span>
+    <span class="course-level">{{ course.level }}</span>
+  </div>
+</a>

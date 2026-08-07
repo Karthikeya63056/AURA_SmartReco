@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Search{% endblock %}
+
+{% block content %}
+<section class="section search-page fade-in">
+  <div class="hero-badge" style="margin-bottom:18px;">Search Courses</div>
+
+  <h1 class="section-title" style="font-size: clamp(2rem, 4vw, 2.6rem); margin-bottom:20px;">
+    Find your next course
+  </h1>
+
+  <form class="search-form" action="/search" method="GET">
+    <input
+      type="search"
+      name="q"
+      value="{{ query or '' }}"
+      placeholder="Search by topic, skill, or keyword…"
+      required
+      autocomplete="off"
+    >
+    <button type="submit" class="btn btn-cyan">Search</button>
+  </form>
+
+  {% if query %}
+  <p class="search-meta">
+    Showing results for “<span class="query">{{ query }}</span>”
+    {% if courses %} · {{ courses|length }} found{% endif %}
+  </p>
+  {% endif %}
+</section>
+
+<section class="section fade-in"
+         style="padding-top:0; padding-bottom:90px;"
+         id="searchResults"
+         data-query="{{ query or '' }}"
+         data-results-count="{{ courses|length if courses else 0 }}">
+
+  {% if courses and courses|length > 0 %}
+    <div class="course-grid stagger">
+      {% for course in courses %}
+        {% with course=course, source='search' %}
+          {% include "components/course_card.html" %}
+        {% endwith %}
+      {% endfor %}
+    </div>
+  {% elif query %}
+    <div class="empty-state">
+      <h3>No matches</h3>
+      <p>Try a broader keyword or browse the full catalog.</p>
+      <a href="/catalog" class="btn btn-outline">Browse Catalog</a>
+    </div>
+  {% else %}
+    <p class="text-muted">Enter a query to search the catalog.</p>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/pages/search.js"></script>
+{% endblock %}

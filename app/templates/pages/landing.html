@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<section class="hero fade-in">
+  <div>
+    <div class="hero-badge">
+      <span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--cyan);display:inline-block;"></span>
+      Powered by Mesh API · LangGraph
+    </div>
+
+    <h1>
+      Your AI Learning<br>
+      <span class="gradient-text">Mentor</span>
+    </h1>
+
+    <p class="hero-sub">
+      AURA watches how you explore courses, understands your interests,
+      and generates personalized recommendations that evolve with every click.
+    </p>
+
+    <div class="hero-actions">
+      <a href="/catalog" class="btn btn-primary btn-lg">Explore Courses</a>
+      {% if user %}
+        <a href="/dashboard" class="btn btn-outline btn-lg">Go to Dashboard</a>
+      {% else %}
+        <a href="/register" class="btn btn-outline btn-lg">Get Recommendations</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div>
+    {% with recommendation=recommendation, card_class='glow-cyan', empty_message='Create an account and explore a few courses — AURA will build a living profile and recommend what fits your journey.' %}
+      {% include "components/recommendation_card.html" %}
+    {% endwith %}
+  </div>
+</section>
+
+<section class="section fade-in">
+  <div class="section-header">
+    <h2 class="section-title">Featured Courses</h2>
+    <a href="/catalog" class="section-link">View all →</a>
+  </div>
+
+  <div class="course-grid stagger">
+    {% for course in courses %}
+      {% with course=course, source='landing' %}
+        {% include "components/course_card.html" %}
+      {% endwith %}
+    {% else %}
+      <p class="text-muted">No courses yet. Run the seed script.</p>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="section fade-in" style="padding-top:0;">
+  <div class="section-header">
+    <h2 class="section-title">How AURA Works</h2>
+  </div>
+  <div class="steps stagger">
+    <div class="step-card fade-in">
+      <div class="step-num">01</div>
+      <h3>Explore Freely</h3>
+      <p>Browse courses, search topics, and spend time on what interests you. Every action is quietly observed.</p>
+    </div>
+    <div class="step-card fade-in">
+      <div class="step-num">02</div>
+      <h3>AURA Understands</h3>
+      <p>The LangGraph agent analyzes your behavior, builds a living profile, and retrieves the most relevant courses.</p>
+    </div>
+    <div class="step-card fade-in">
+      <div class="step-num">03</div>
+      <h3>Get Recommendations</h3>
+      <p>Receive persuasive, personalized recommendations that update as your interests evolve.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section fade-in" style="padding-top:20px; padding-bottom:100px;">
+  <div class="landing-cta-band">
+    <div class="rec-side-card">
+      <h2 class="section-title" style="margin-bottom:12px;">Ready to learn smarter?</h2>
+      <p class="text-muted" style="margin-bottom:28px;">
+        Join AURA and experience recommendations that actually understand how you learn.
+      </p>
+      <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+        <a href="/register" class="btn btn-cyan btn-lg">Create Free Account</a>
+        <a href="/catalog" class="btn btn-outline btn-lg">Browse Catalog</a>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

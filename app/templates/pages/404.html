@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Not found{% endblock %}
+
+{% block content %}
+<div class="error-page fade-in">
+  <div class="code">404</div>
+  <h1>Page not found</h1>
+  <p class="text-muted">
+    This route doesn’t exist — or the course you’re looking for was removed.
+  </p>
+  <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center;">
+    <a href="/" class="btn btn-cyan">Go home</a>
+    <a href="/catalog" class="btn btn-outline">Browse catalog</a>
+  </div>
+</div>
+{% endblock %}

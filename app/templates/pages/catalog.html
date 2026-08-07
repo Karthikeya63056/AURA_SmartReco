@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Catalog{% endblock %}
+
+{% block content %}
+<section class="section catalog-page fade-in">
+  <div class="section-header">
+    <h1 class="section-title">Course Catalog</h1>
+  </div>
+
+  <div class="filters" id="filters">
+    <button type="button" class="filter-btn active" data-filter="all">All</button>
+    <button type="button" class="filter-btn" data-filter="AI & Agents">AI & Agents</button>
+    <button type="button" class="filter-btn" data-filter="AI & Machine Learning">Machine Learning</button>
+    <button type="button" class="filter-btn" data-filter="Web Dev">Web Dev</button>
+    <button type="button" class="filter-btn" data-filter="Python & Data">Python & Data</button>
+  </div>
+
+  <div class="course-grid stagger">
+    {% for course in courses %}
+      {% with course=course, source='catalog' %}
+        {% include "components/course_card.html" %}
+      {% endwith %}
+    {% else %}
+      <div class="empty-state">
+        <h3>No courses found</h3>
+        <p>Seed the catalog or check back soon.</p>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/pages/catalog.js"></script>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Learning Paths{% endblock %}
+
+{% block content %}
+<section class="section paths-page fade-in">
+  <div class="section-header">
+    <div>
+      <h1 class="section-title">Learning Paths</h1>
+      <p class="text-muted" style="margin-top:8px; max-width:48ch;">
+        Curated journeys through the catalog. Pick a direction — AURA will personalize from your behavior.
+      </p>
+    </div>
+  </div>
+
+  <div class="paths-grid stagger">
+    <a href="/catalog?category=AI%20%26%20Agents" class="course-card path-card fade-in">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Intermediate</span>
+        <span class="badge">Agentic AI</span>
+      </div>
+      <div class="course-title" style="font-size:1.2rem;">AI Agents Track</div>
+      <div class="course-desc">
+        LangGraph, tool use, evaluation loops, and production agent patterns.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">4–6 months</span>
+        <span class="text-cyan text-sm">Explore →</span>
+      </div>
+    </a>
+
+    <a href="/catalog?category=AI%20%26%20Machine%20Learning" class="course-card path-card fade-in">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Beginner+</span>
+        <span class="badge">ML</span>
+      </div>
+      <div class="course-title" style="font-size:1.2rem;">Machine Learning Foundations</div>
+      <div class="course-desc">
+        Core ML, deep learning intuition, and applied projects for real systems.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">3–5 months</span>
+        <span class="text-cyan text-sm">Explore →</span>
+      </div>
+    </a>
+
+    <a href="/catalog?category=Web%20Dev" class="course-card path-card fade-in">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Intermediate</span>
+        <span class="badge">Full stack</span>
+      </div>
+      <div class="course-title" style="font-size:1.2rem;">Full Stack Developer</div>
+      <div class="course-desc">
+        Modern frontend, backend APIs, databases, and deployment for real products.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">7–10 months</span>
+        <span class="text-cyan text-sm">Explore →</span>
+      </div>
+    </a>
+
+    <a href="/catalog?category=Python%20%26%20Data" class="course-card path-card fade-in">
+      <div class="course-meta">
+        <span class="badge badge-cyan">Beginner</span>
+        <span class="badge">Data</span>
+      </div>
+      <div class="course-title" style="font-size:1.2rem;">Python & Data</div>
+      <div class="course-desc">
+        Python fluency, data wrangling, and analytics workflows for builders.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">2–4 months</span>
+        <span class="text-cyan text-sm">Explore →</span>
+      </div>
+    </a>
+  </div>
+</section>
+{% endblock %}

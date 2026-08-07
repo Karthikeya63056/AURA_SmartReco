@@ -1,0 +1,47 @@
+{#
+  Expects: recommendation dict with:
+    narrative, product_ids (list), quality_score?, trigger_reason?
+  Optional:
+    show_chips (default true)
+    empty_message (string)
+    card_class (extra classes e.g. "glow-cyan")
+#}
+{% set show_chips = show_chips if show_chips is defined else true %}
+{% set empty_message = empty_message if empty_message is defined else "Start exploring courses. AURA will analyze your behavior and generate a personalized recommendation here." %}
+{% set card_class = card_class if card_class is defined else "" %}
+
+<div class="rec-side-card {{ card_class }}">
+  <div class="rec-label">
+    <span class="dot pulse-ring"></span>
+    AURA Recommendation
+  </div>
+
+  <div class="rec-narrative" id="recNarrative">
+    {% if recommendation and recommendation.narrative %}
+      <div id="narrativeContent">{{ recommendation.narrative }}</div>
+    {% else %}
+      <p class="text-muted" style="font-size:0.9rem; line-height:1.65;">
+        {{ empty_message }}
+      </p>
+    {% endif %}
+  </div>
+
+  {% if show_chips and recommendation and recommendation.product_ids %}
+  <div class="rec-chips">
+    {% for pid in recommendation.product_ids[:4] %}
+      <a href="/course/{{ pid }}" class="rec-chip">View course</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if recommendation and (recommendation.quality_score is defined or recommendation.trigger_reason is defined) %}
+  <div style="margin-top:16px; display:flex; flex-wrap:wrap; gap:8px;">
+    {% if recommendation.quality_score is defined and recommendation.quality_score is not none %}
+      <span class="badge badge-cyan">score {{ recommendation.quality_score }}</span>
+    {% endif %}
+    {% if recommendation.trigger_reason %}
+      <span class="badge">{{ recommendation.trigger_reason }}</span>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>

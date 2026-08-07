@@ -1,44 +1,103 @@
 {% extends "base.html" %}
-
-{% block title %}Agent Trace Inspector — SmartReco 2026{% endblock %}
+{% block title %}Admin · Agent Trace{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
-    <div class="flex items-center justify-between border-b border-slate-800 pb-4">
-        <div>
-            <h1 class="text-3xl font-extrabold tracking-tight text-slate-100 flex items-center space-x-3">
-                <i class="fa-solid fa-code-branch text-cyan-400"></i>
-                <span>Agent Execution Trace for User #<span id="trace-uid">...</span></span>
-            </h1>
-            <p class="text-slate-400 text-sm">Detailed state inspection: behavioral analysis, candidate retrieval scores, refetch loops, and trigger reasons.</p>
-        </div>
-        <a href="/admin/dashboard" class="text-xs text-slate-400 hover:text-cyan-400">&larr; Back to Admin</a>
+<section class="admin-page fade-in">
+  <div class="admin-toolbar">
+    <div>
+      <h1 class="section-title" style="margin-bottom:4px;">Agent trace</h1>
+      <p class="text-muted text-sm">
+        User #{{ user_id }}
+        {% if target_user and target_user.email %} · {{ target_user.email }}{% endif %}
+      </p>
     </div>
+    <div class="admin-actions">
+      <a href="/admin/dashboard" class="btn btn-ghost btn-sm">← Dashboard</a>
+      <a href="/profile" class="btn btn-outline btn-sm">Learner profile</a>
+    </div>
+  </div>
 
-    <!-- Trace Output Box -->
-    <div class="glass-panel rounded-2xl p-6 border border-slate-800 space-y-4">
-        <h2 class="text-lg font-bold text-slate-200">Raw Agent State & Database Trace JSON</h2>
-        <pre id="trace-json" class="bg-slate-900 p-6 rounded-xl border border-slate-800 text-xs font-mono text-cyan-300 overflow-x-auto max-h-[600px]">Loading trace data...</pre>
+  {% if recommendation %}
+  <div class="rec-side-card" style="margin-bottom: var(--space-8);">
+    <div class="rec-label">
+      <span class="dot pulse-ring"></span>
+      Latest recommendation
     </div>
-</div>
+    <div class="rec-narrative" id="narrativeContent">
+      {{ recommendation.narrative }}
+    </div>
+    <div class="rec-chips" style="margin-top:16px;">
+      <span class="badge badge-cyan">score {{ recommendation.quality_score | default('—') }}</span>
+      <span class="badge">{{ recommendation.trigger_reason | default('agent') }}</span>
+      {% if recommendation.refetch_count is defined %}
+      <span class="badge">refetch ×{{ recommendation.refetch_count }}</span>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="empty-state" style="border:1px solid var(--border); border-radius:var(--radius-lg); margin-bottom:32px;">
+    <h3>No recommendation yet</h3>
+    <p>This user has no active agent output. Browse as the user or force a refresh from their dashboard.</p>
+  </div>
+  {% endif %}
+
+  <div class="section-header" style="padding-inline:0;">
+    <h2 class="section-title">Workflow notes</h2>
+  </div>
+
+  {% if trace_nodes is defined and trace_nodes %}
+    {% for node in trace_nodes %}
+    <div class="trace-node">
+      <div class="node-name">{{ node.name | default(node.get('name', 'node')) }}</div>
+      <div>{{ node.summary | default(node.get('summary', node) | string) }}</div>
+    </div>
+    {% endfor %}
+  {% elif recommendation and recommendation.metadata_json %}
+    <div class="trace-panel">{{ recommendation.metadata_json | tojson(indent=2) }}</div>
+  {% else %}
+    <div class="trace-panel">
+No detailed trace payload stored for this run.
+
+When LangSmith / LangGraph tracing is enabled, node outputs
+(analyze → retrieve → evaluate → generate → store) will appear here.
+
+For now, use quality_score, trigger_reason, and refetch_count
+on the recommendation card above as a lightweight audit trail.
+    </div>
+  {% endif %}
+
+  {% if recent_events is defined and recent_events %}
+  <div class="section-header" style="padding-inline:0; margin-top: var(--space-10);">
+    <h2 class="section-title">Recent user events</h2>
+  </div>
+  <div class="activity-list">
+    {% for event in recent_events[:15] %}
+    <div class="activity-item">
+      <div>
+        <div class="event-type">{{ event.event_type }}</div>
+        <div class="text-dim text-xs" style="margin-top:4px; max-width:48ch; overflow:hidden; text-overflow:ellipsis;">
+          {{ event.payload_json | tojson }}
+        </div>
+      </div>
+      <div class="event-time">
+        {% if event.created_at %}{{ event.created_at.strftime('%b %d, %H:%M') }}{% else %}—{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    async function loadTrace() {
-        const pathParts = window.location.pathname.split('/');
-        const uid = pathParts[pathParts.length - 1];
-        document.getElementById('trace-uid').innerText = uid;
-
-        try {
-            const res = await fetch(`/admin/agent-trace/${uid}`);
-            const data = await res.json();
-            document.getElementById('trace-json').innerText = JSON.stringify(data, null, 2);
-        } catch (err) {
-            document.getElementById('trace-json').innerText = 'Failed to load agent trace: ' + err.message;
-        }
+  document.addEventListener('DOMContentLoaded', function () {
+    const el = document.getElementById('narrativeContent');
+    if (el && window.AURA_UI) {
+      AURA_UI.renderMarkdown(el);
+    } else if (el && typeof marked !== 'undefined') {
+      el.innerHTML = marked.parse(el.textContent || '');
     }
-
-    document.addEventListener('DOMContentLoaded', loadTrace);
+  });
 </script>
 {% endblock %}

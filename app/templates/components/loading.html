@@ -1,0 +1,8 @@
+{#
+  Optional: label (string)
+#}
+{% set label = label if label is defined else "Loading…" %}
+<div class="loading-overlay" role="status" aria-live="polite">
+  <div class="spinner spinner-lg" aria-hidden="true"></div>
+  <div>{{ label }}</div>
+</div>

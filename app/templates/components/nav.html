@@ -1,0 +1,76 @@
+{#
+  Expects: user (optional User)
+  Active link: set request path via request.url.path
+#}
+<div class="nav-wrapper" id="navWrapper">
+  <nav class="nav" aria-label="Main">
+    <a href="/" class="nav-logo">
+      AURA <span>TM</span>
+    </a>
+
+    <ul class="nav-links">
+      <li>
+        <a href="/catalog"
+           class="{% if request.url.path.startswith('/catalog') or request.url.path.startswith('/course') %}active{% endif %}">
+          Courses
+        </a>
+      </li>
+      <li>
+        <a href="/search"
+           class="{% if request.url.path.startswith('/search') %}active{% endif %}">
+          Search
+        </a>
+      </li>
+      <li>
+        <a href="/paths"
+           class="{% if request.url.path.startswith('/paths') %}active{% endif %}">
+          Paths
+        </a>
+      </li>
+      <li>
+        <a href="/about"
+           class="{% if request.url.path.startswith('/about') %}active{% endif %}">
+          How it works
+        </a>
+      </li>
+      {% if user %}
+      <li>
+        <a href="/dashboard"
+           class="{% if request.url.path.startswith('/dashboard') %}active{% endif %}">
+          Dashboard
+        </a>
+      </li>
+      <li>
+        <a href="/profile"
+           class="{% if request.url.path.startswith('/profile') %}active{% endif %}">
+          Profile
+        </a>
+      </li>
+      {% endif %}
+      {% if user and user.is_admin %}
+      <li>
+        <a href="/admin/dashboard"
+           class="{% if request.url.path.startswith('/admin') %}active{% endif %}">
+          Admin
+        </a>
+      </li>
+      {% endif %}
+    </ul>
+
+    <div class="nav-actions">
+      {% if user %}
+        <a href="/profile" class="text-muted text-sm" style="max-width:12ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          {{ user.email.split('@')[0] if user.email else 'Account' }}
+        </a>
+        <a href="#" class="btn btn-ghost btn-sm" id="logoutBtn" data-auth-logout>Sign out</a>
+      {% else %}
+        <a href="/login" class="btn btn-ghost btn-sm">Sign in</a>
+        <a href="/register" class="btn btn-primary btn-sm">Get started</a>
+      {% endif %}
+
+      <button type="button" class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false">
+        <span aria-hidden="true">☰</span>
+      </button>
+    </div>
+  </nav>
+</div>

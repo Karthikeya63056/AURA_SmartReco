@@ -1,0 +1,69 @@
+/**
+ * Catalog — category filters + course click tracking
+ */
+(function () {
+  'use strict';
+
+  function applyFilter(filter) {
+    document.querySelectorAll('.course-card').forEach(function (card) {
+      const category = card.getAttribute('data-category') || '';
+      const show = filter === 'all' || category === filter;
+      card.style.display = show ? '' : 'none';
+    });
+
+    if (window.SmartTracker) {
+      SmartTracker.track('filter', { category: filter });
+    }
+  }
+
+  function initFromQuery() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const category = params.get('category');
+      if (!category) return;
+
+      const btn = document.querySelector('.filter-btn[data-filter="' + CSS.escape(category) + '"]');
+      if (btn) {
+        document.querySelectorAll('.filter-btn').forEach(function (b) {
+          b.classList.remove('active');
+        });
+        btn.classList.add('active');
+        applyFilter(category);
+      }
+    } catch (e) {
+      console.warn('[catalog] query filter failed', e);
+    }
+  }
+
+  function init() {
+    document.querySelectorAll('.filter-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('.filter-btn').forEach(function (b) {
+          b.classList.remove('active');
+        });
+        btn.classList.add('active');
+        applyFilter(btn.dataset.filter || 'all');
+      });
+    });
+
+    document.querySelectorAll('.course-card[data-course-id]').forEach(function (card) {
+      card.addEventListener('click', function () {
+        if (window.SmartTracker) {
+          SmartTracker.trackCourseClick(
+            card.dataset.courseId,
+            card.dataset.courseTitle || '',
+            { source: 'catalog' }
+          );
+        }
+      });
+    });
+
+    initFromQuery();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
