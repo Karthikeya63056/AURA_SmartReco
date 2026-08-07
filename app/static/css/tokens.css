@@ -26,13 +26,50 @@
   --text-dim:      #5a5a66;
   --text-inverse:  #050505;
 
-  /* ---------- Color · Brand ---------- */
-  --cyan:          #22d3ee;
-  --cyan-bright:   #67e8f9;
-  --cyan-soft:     rgba(34, 211, 238, 0.12);
-  --cyan-muted:    rgba(34, 211, 238, 0.08);
+
+/* =========================================================
+   AURA Brand System · Trust + Intelligence
+   ========================================================= */
+
+/* --- Primary Brand Trio --- */
+--aurora-1: #14B8A6;   /* Teal · Trust, clarity, focus */
+--aurora-2: #8B5CF6;   /* Violet · AI / intelligence */
+--aurora-3: #F59E0B;   /* Amber · Energy / CTA warmth */
+
+/* --- Gradient (use sparingly: hero, logo, key cards) --- */
+--aurora-gradient: linear-gradient(
+  135deg,
+  var(--aurora-1) 0%,
+  var(--aurora-2) 52%,
+  var(--aurora-3) 100%
+);
+
+/* --- Soft effects for dark glass UI --- */
+--aurora-glow: rgba(20, 184, 166, 0.18);     /* focus rings, active states */
+--aurora-soft: rgba(139, 92, 246, 0.10);     /* card washes, subtle fills */
+--aurora-amber-soft: rgba(245, 158, 11, 0.12);
+
+/* --- Semantic roles --- */
+--color-primary: var(--aurora-1);
+--color-secondary: var(--aurora-2);
+--color-accent: var(--aurora-3);
+
+/* --- Text on dark glass --- */
+--text-primary: #F8FAFC;                    /* headings */
+--text-secondary: rgba(248, 250, 252, 0.78); /* body */
+--text-muted: rgba(248, 250, 252, 0.48);     /* meta / labels */
+
+/* --- Surfaces (recommended companions) --- */
+--bg-deep: #070A12;
+--bg-panel: rgba(15, 18, 28, 0.72);
+--bg-elevated: rgba(24, 28, 42, 0.88);
+--border-subtle: rgba(255, 255, 255, 0.08);
+--border-accent: rgba(20, 184, 166, 0.35);
+
+  
+  /* Keep legacy cyan for success/info, but brand is now Aurora */
+  --cyan:          #22d3ee; 
   --cyan-border:   rgba(34, 211, 238, 0.25);
-  --cyan-glow:     rgba(34, 211, 238, 0.18);
 
   /* ---------- Color · Semantic ---------- */
   --success:       #34d399;

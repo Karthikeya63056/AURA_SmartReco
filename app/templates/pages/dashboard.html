@@ -5,12 +5,12 @@
 <section class="hero dashboard-hero fade-in">
   <div>
     <div class="hero-badge">
-      <span class="dot pulse-ring" style="width:6px;height:6px;border-radius:50%;background:var(--cyan);display:inline-block;"></span>
+      <span class="dot pulse-ring" style="width:6px;height:6px;border-radius:50%;background:var(--aurora-2, #ec4899);box-shadow:0 0 8px var(--aurora-2, #ec4899);display:inline-block;"></span>
       Your Learning Hub
     </div>
 
     <h1 style="font-size: clamp(2rem, 4vw, 2.8rem);">
-      Welcome back{% if user and user.email %}, {{ user.email.split('@')[0] }}{% endif %}
+      Welcome back{% if user and user.email %}, <span class="gradient-text">{{ user.email.split('@')[0] }}</span>{% endif %}
     </h1>
 
     <p class="hero-sub">
@@ -47,7 +47,7 @@
       <div class="stat-label">Actions Tracked</div>
     </div>
     <div class="stat-card fade-in">
-      <div class="stat-value status-live">Live</div>
+      <div class="stat-value status-live" style="color: var(--aurora-2, #ec4899);">Live</div>
       <div class="stat-label">Agent Status</div>
     </div>
   </div>

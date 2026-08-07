@@ -107,7 +107,7 @@
   gap: var(--space-3);
 }
 
-/* Mobile menu toggle (wire in JS later) */
+/* Mobile menu toggle */
 .nav-toggle {
   display: none;
   width: 40px;
@@ -177,15 +177,21 @@
   box-shadow: var(--shadow-sm);
 }
 
+/* 🌌 AURORA GRADIENT BUTTON */
 .btn-cyan {
-  background: var(--cyan);
-  color: var(--text-inverse);
-  box-shadow: 0 0 0 0 var(--cyan-glow);
+  background: var(--aurora-gradient, linear-gradient(135deg, #8b5cf6 0%, #ec4899 50%, #f59e0b 100%));
+  color: #ffffff;
+  font-weight: 600;
+  border: none;
+  box-shadow: 0 4px 20px var(--aurora-glow, rgba(139, 92, 246, 0.25));
+  transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
 }
 
 .btn-cyan:hover {
-  background: var(--cyan-bright);
-  box-shadow: var(--glow-cyan);
+  background: var(--aurora-gradient, linear-gradient(135deg, #8b5cf6 0%, #ec4899 50%, #f59e0b 100%));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px var(--aurora-glow, rgba(139, 92, 246, 0.4));
+  filter: brightness(1.1);
 }
 
 .btn-outline {
@@ -336,34 +342,56 @@
   font-family: var(--font-mono);
 }
 
-/* ---------- RECOMMENDATION CARD ---------- */
+/* ---------- 🌌 HOLOGRAPHIC RECOMMENDATION CARD ---------- */
 .rec-side-card {
   position: relative;
   padding: var(--space-6);
   background: var(--bg-card);
-  border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  overflow: hidden;
-  transition:
-    border-color var(--duration) var(--ease-out),
-    box-shadow var(--duration) var(--ease-out);
+  border: none; /* Remove standard border */
+  overflow: visible; /* Allow glow to spill out */
+  isolation: isolate;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+  transition: transform var(--duration) var(--ease-out);
 }
 
 .rec-side-card:hover {
-  border-color: var(--cyan-border);
-  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(34, 211, 238, 0.06);
+  transform: translateY(-4px);
 }
 
+/* The Animated Holographic Border */
 .rec-side-card::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-  background-size: 200% 100%;
-  animation: shimmer 3s linear infinite;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px; /* Border thickness */
+  background: var(--aurora-gradient, linear-gradient(135deg, #8b5cf6 0%, #ec4899 50%, #f59e0b 100%));
+  background-size: 300% 300%;
+  animation: holo-border 6s linear infinite;
+  
+  /* Masking trick to make it only show on the border */
+  -webkit-mask: 
+    linear-gradient(#fff 0 0) content-box, 
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* The glowing aura behind the card */
+.rec-side-card::after {
+  content: '';
+  position: absolute;
+  inset: -15px;
+  background: var(--aurora-gradient, linear-gradient(135deg, #8b5cf6 0%, #ec4899 50%, #f59e0b 100%));
+  filter: blur(40px);
+  opacity: 0.15;
+  z-index: -2;
+  border-radius: inherit;
+  animation: pulse-glow 4s ease-in-out infinite alternate;
+  pointer-events: none;
 }
 
 .rec-side-card.glow-cyan {
@@ -376,18 +404,24 @@
   gap: var(--space-2);
   font-size: var(--text-xs);
   font-family: var(--font-mono);
-  color: var(--cyan);
+  background: var(--aurora-soft, rgba(236, 72, 153, 0.12));
+  color: var(--aurora-2, #ec4899); /* Magenta text */
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   margin-bottom: var(--space-4);
+  border: 1px solid rgba(236, 72, 153, 0.3);
 }
 
 .rec-label .dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--cyan);
+  background: var(--aurora-2, #ec4899);
+  box-shadow: 0 0 8px var(--aurora-2, #ec4899);
   flex-shrink: 0;
+  animation: blink 2s infinite;
 }
 
 .pulse-ring {
@@ -841,4 +875,126 @@
 /* ---------- GLOW UTILITY ---------- */
 .glow-cyan {
   box-shadow: var(--glow-cyan);
+}
+
+/* ---------- 🌌 AURORA ANIMATIONS ---------- */
+@keyframes holo-border {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+
+@keyframes pulse-glow {
+  0% { opacity: 0.1; transform: scale(0.98); }
+  100% { opacity: 0.25; transform: scale(1.02); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ============================================================
+   🥂 OBSIDIAN CHAMPAGNE — Refined Polish Pack (Low-Radiance)
+   ============================================================ */
+
+/* 1. Elegant Bronze Scrollbar */
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #4a4a52, #b08d2f);
+  border-radius: 999px;
+  border: 2px solid var(--bg);
+}
+
+/* 2. Champagne Text Selection */
+::selection {
+  background: rgba(212, 175, 55, 0.30);
+  color: #ffffff;
+}
+
+/* 3. Thin Gold Hairline on Course Card Hover (no rainbow glow) */
+.course-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg,
+    rgba(212, 175, 55, 0.55),
+    rgba(233, 216, 166, 0.25),
+    rgba(212, 175, 55, 0.55));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.course-card:hover::before { opacity: 1; }
+.course-card:hover { border-color: transparent; }
+
+/* 4. Soft Sheen on Buttons (subtle, not flashy) */
+.btn-cyan {
+  position: relative;
+  overflow: hidden;
+  box-shadow: none; /* remove the radiant glow */
+}
+
+.btn-cyan::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -80%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.6s ease;
+  pointer-events: none;
+}
+
+.btn-cyan:hover::after { left: 130%; }
+
+/* 5. Ivory→Gold Stat Numbers */
+.stat-value {
+  background: linear-gradient(135deg, #ffffff 0%, #e9d8a6 70%, #d4af37 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* 6. Gold Hairline Under Section Titles (no glow) */
+.section-title {
+  position: relative;
+  display: inline-block;
+}
+
+.section-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -8px;
+  width: 56px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #d4af37, #e9d8a6);
+}
+
+/* 7. Calm the Recommendation Label (gold, not magenta) */
+.rec-label {
+  background: var(--aurora-soft);
+  color: var(--aurora-2);
+  border-color: rgba(212, 175, 55, 0.35);
+}
+
+.rec-label .dot {
+  background: var(--aurora-1);
+  box-shadow: 0 0 6px rgba(212, 175, 55, 0.5);
+}
+
+/* 8. Remove the violet hero glow (kill the radiance) */
+.hero h1 {
+  text-shadow: none;
 }
