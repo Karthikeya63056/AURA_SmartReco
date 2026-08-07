@@ -4,7 +4,7 @@ from typing import Dict, Any, List
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.schemas.event import EventBatchRequest
+from app.schemas.event import EventBatchRequest, ALLOWED_EVENT_TYPES
 from app.models.event import Event
 from app.models.user import User
 from app.core.cache import cache
@@ -19,16 +19,33 @@ router = APIRouter(prefix="/api/events", tags=["Events"])
 _rate_limit_map: Dict[str, List[float]] = {}
 RATE_LIMIT_WINDOW_SECONDS = 60
 MAX_EVENTS_PER_WINDOW = 100
+MAX_RATE_LIMIT_KEYS = 10_000  # Hard cap to prevent unbounded memory growth
 
 
 def _check_rate_limit(rate_key: str) -> bool:
-    """Simple sliding window rate limiter."""
+    """
+    Simple sliding-window rate limiter with a hard cap on dictionary size
+    to prevent memory exhaustion from attacker-controlled keys.
+    """
     now = time.time()
+
+    # Evict oldest keys if we are at the hard limit
+    if len(_rate_limit_map) >= MAX_RATE_LIMIT_KEYS and rate_key not in _rate_limit_map:
+        # Remove the oldest key (first inserted)
+        try:
+            oldest_key = next(iter(_rate_limit_map))
+            del _rate_limit_map[oldest_key]
+        except StopIteration:
+            pass
+
     timestamps = _rate_limit_map.get(rate_key, [])
-    # Keep only timestamps within window
+    # Keep only timestamps within the window
     timestamps = [ts for ts in timestamps if now - ts <= RATE_LIMIT_WINDOW_SECONDS]
+
     if len(timestamps) >= MAX_EVENTS_PER_WINDOW:
+        _rate_limit_map[rate_key] = timestamps
         return False
+
     timestamps.append(now)
     _rate_limit_map[rate_key] = timestamps
     return True
@@ -37,12 +54,14 @@ def _check_rate_limit(rate_key: str) -> bool:
 @router.post("/batch", status_code=status.HTTP_201_CREATED)
 def ingest_event_batch(
     payload: EventBatchRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_optional)
 ):
     """
     Ingest a batch of user interaction events.
-    Enforces rate limiting, idempotency key deduplication, and evaluates Smart Triggers.
+    Enforces rate limiting, event-type allowlist, payload size limit,
+    idempotency key deduplication, and evaluates Smart Triggers.
     """
     if not payload.events:
         return {"status": "success", "ingested": 0, "trigger": {"should_run_agent": False}}
@@ -52,8 +71,15 @@ def ingest_event_batch(
     user_id = user.id
     session_id = payload.events[0].session_id if payload.events else "default_session"
 
-    # Rate limiting check
-    rate_key = f"user_{user_id}" if current_user else f"sess_{session_id}"
+    # Rate limiting key:
+    # - Authenticated users → user_id (stable)
+    # - Anonymous users → client IP (cannot be controlled by the client)
+    if current_user:
+        rate_key = f"user_{user_id}"
+    else:
+        client_ip = request.client.host if request.client else "unknown"
+        rate_key = f"ip_{client_ip}"
+
     if not _check_rate_limit(rate_key):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -69,6 +95,11 @@ def ingest_event_batch(
 
     ingested_count = 0
     for item in payload.events:
+        # Defense-in-depth: re-check allowlist (schema already validates)
+        if item.event_type not in ALLOWED_EVENT_TYPES:
+            logger.warning(f"Rejected disallowed event_type: {item.event_type}")
+            continue
+
         if item.idempotency_key and item.idempotency_key in existing_keys:
             continue
 

@@ -62,9 +62,10 @@
   function init() {
     const narrativeEl = document.getElementById('narrativeContent');
     if (narrativeEl && window.AURA_UI) {
-      AURA_UI.renderMarkdown(narrativeEl);
+        AURA_UI.renderMarkdown(narrativeEl);
     } else if (narrativeEl && typeof marked !== 'undefined') {
-      narrativeEl.innerHTML = marked.parse(narrativeEl.textContent || '');
+      const html = marked.parse(narrativeEl.textContent || '');
+      narrativeEl.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
     }
 
     const btn = document.getElementById('refreshBtn');

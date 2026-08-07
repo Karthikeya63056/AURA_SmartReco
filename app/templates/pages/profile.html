@@ -107,7 +107,12 @@
   document.addEventListener('DOMContentLoaded', function () {
     var el = document.getElementById('narrativeContent');
     if (el && window.AURA_UI) AURA_UI.renderMarkdown(el);
-    else if (el && typeof marked !== 'undefined') el.innerHTML = marked.parse(el.textContent || '');
+    else if (el && typeof marked !== 'undefined') {
+      const html = marked.parse(el.textContent || '');
+      el.innerHTML = (typeof DOMPurify !== 'undefined')
+      ? DOMPurify.sanitize(html)
+      : html;
+    }
   });
 </script>
 {% endblock %}

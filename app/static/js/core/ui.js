@@ -78,22 +78,26 @@
    * @param {string} [rawMarkdown] - if omitted, uses element textContent
    */
   function renderMarkdown(elOrId, rawMarkdown) {
-    const el = typeof elOrId === 'string'
-      ? document.getElementById(elOrId)
-      : elOrId;
+  const el = typeof elOrId === 'string'
+    ? document.getElementById(elOrId)
+    : elOrId;
 
-    if (!el) return;
+  if (!el) return;
 
-    const source = rawMarkdown != null ? String(rawMarkdown) : (el.textContent || '');
-    if (!source.trim()) return;
+  const source = rawMarkdown != null ? String(rawMarkdown) : (el.textContent || '');
+  if (!source.trim()) return;
 
-    if (typeof global.marked !== 'undefined' && typeof global.marked.parse === 'function') {
-      el.innerHTML = global.marked.parse(source);
-    } else {
-      // Fallback: keep plain text
-      el.textContent = source;
-    }
+  if (typeof global.marked !== 'undefined' && typeof global.marked.parse === 'function') {
+    const html = global.marked.parse(source);
+    // Sanitize to prevent stored XSS from LLM narratives
+    el.innerHTML = (typeof global.DOMPurify !== 'undefined')
+      ? global.DOMPurify.sanitize(html)
+      : html;
+  } else {
+    // Fallback: keep plain text
+    el.textContent = source;
   }
+}
 
   /**
    * Show a simple full-block loading state inside a container

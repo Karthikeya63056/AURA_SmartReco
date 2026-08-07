@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.database import engine, Base, get_db
 from app.dependencies import get_current_user_optional, get_admin_user
@@ -23,6 +24,29 @@ from app.services.product_service import list_products
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("smartreco")
+
+
+# ============================================================
+# Security Headers Middleware (Bug #10)
+# ============================================================
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        # Practical CSP for this app (self + CDNs used by frontend)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self' https://api.meshapi.ai; "
+            "frame-ancestors 'none';"
+        )
+        return response
 
 
 # Event types that count as "course engagement" for dashboard stats
@@ -98,6 +122,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Register security headers middleware
+app.add_middleware(SecurityHeadersMiddleware)
 
 os.makedirs("app/static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -476,5 +503,4 @@ async def server_error_handler(request: Request, exc):
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -17,6 +17,19 @@ from app.core.database import SessionLocal
 
 logger = logging.getLogger(__name__)
 
+
+def sanitize_prompt_input(text: str, max_len: int = 500) -> str:
+    """
+    Truncate and escape curly braces so user-controlled data cannot
+    break .format() or inject prompt instructions.
+    """
+    if text is None:
+        return ""
+    text = str(text)[:max_len]
+    # Escape braces so they become literal characters in the final prompt
+    return text.replace("{", "{{").replace("}", "}}")
+
+
 # Map free-form LLM interest labels → actual Product.category values in seed data.
 # Without this, Chroma `$in` filters on raw interests (e.g. "Artificial Intelligence")
 # never match catalog categories (e.g. "AI & Agents") and always return 0 hits.
@@ -148,7 +161,9 @@ async def analyze_behavior_node(state: AgentState) -> Dict[str, Any]:
     logger.info(f"[Node 1] Analyzing behavior for user {state['user_id']} using model {settings.DEFAULT_CHAT_MODEL}")
     
     events_summary = state.get("events_summary", "No recent event history available.")
-    prompt = BEHAVIOR_ANALYSIS_PROMPT.format(events_summary=events_summary)
+    # Sanitize user-controlled data before .format()
+    safe_events_summary = sanitize_prompt_input(events_summary, max_len=2000)
+    prompt = BEHAVIOR_ANALYSIS_PROMPT.format(events_summary=safe_events_summary)
 
     try:
         response_text = generate_chat_completion(
@@ -250,11 +265,11 @@ async def evaluate_and_rerank_node(state: AgentState) -> Dict[str, Any]:
         })
 
     prompt = EVALUATOR_PROMPT.format(
-        interests=", ".join(user_profile.get("interests", [])),
-        skill_level=user_profile.get("skill_level", "Intermediate"),
-        intent=user_profile.get("intent", "Upskilling"),
-        trigger_reason=trigger_reason,
-        candidates_json=json.dumps(candidates_summary, indent=2)
+        interests=sanitize_prompt_input(", ".join(user_profile.get("interests", [])), 300),
+        skill_level=sanitize_prompt_input(user_profile.get("skill_level", "Intermediate"), 50),
+        intent=sanitize_prompt_input(user_profile.get("intent", "Upskilling"), 80),
+        trigger_reason=sanitize_prompt_input(trigger_reason, 50),
+        candidates_json=sanitize_prompt_input(json.dumps(candidates_summary, indent=2), 3000)
     )
 
     try:
@@ -308,10 +323,10 @@ async def generate_narrative_node(state: AgentState) -> Dict[str, Any]:
     courses_text = "\n".join(courses_info) if courses_info else "Top curated AI courses."
 
     prompt = PERSUASIVE_PROMPT.format(
-        intent=user_profile.get("intent", "Upskilling"),
-        skill_level=user_profile.get("skill_level", "Intermediate"),
-        interests=", ".join(user_profile.get("interests", [])),
-        recommended_courses_text=courses_text
+        intent=sanitize_prompt_input(user_profile.get("intent", "Upskilling"), 80),
+        skill_level=sanitize_prompt_input(user_profile.get("skill_level", "Intermediate"), 50),
+        interests=sanitize_prompt_input(", ".join(user_profile.get("interests", [])), 300),
+        recommended_courses_text=sanitize_prompt_input(courses_text, 2000)
     )
 
     try:

@@ -47,13 +47,7 @@
         return;
       }
 
-      // Optional legacy support if backend still returns token in body
-      if (result.data && result.data.access_token) {
-        try {
-          localStorage.setItem('access_token', result.data.access_token);
-        } catch (_) {}
-      }
-
+      // Auth is cookie-only (HttpOnly). Do not store JWT in localStorage.
       if (window.AURA_UI) AURA_UI.toast('Welcome back', 'success');
       window.location.href = safeNextPath();
     } catch (err) {
@@ -98,14 +92,9 @@
         return;
       }
 
-      // Auto-login after register
+      // Auto-login after register (cookie is set by /auth/login; no localStorage)
       const login = await window.AURA_API.login(email, password);
       if (login.ok) {
-        if (login.data && login.data.access_token) {
-          try {
-            localStorage.setItem('access_token', login.data.access_token);
-          } catch (_) {}
-        }
         if (window.AURA_UI) AURA_UI.toast('Account created', 'success');
         window.location.href = '/dashboard';
       } else {

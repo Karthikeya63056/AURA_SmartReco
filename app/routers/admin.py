@@ -1,10 +1,11 @@
 import logging
 from typing import Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app.core.database import get_db
+from app.core.cache import cache
 from app.dependencies import get_admin_user
 from app.models.user import User
 from app.models.recommendation import Recommendation
@@ -14,6 +15,10 @@ from app.models.event import Event
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+# Cooldown key for manual digest trigger (prevents cost exhaustion / DoS)
+DIGEST_COOLDOWN_KEY = "admin:digest_cooldown"
+DIGEST_COOLDOWN_SECONDS = 3600  # 1 hour
 
 
 def _fetch_agent_trace_data(db: Session, user_id: int) -> Dict[str, Any]:
@@ -57,18 +62,35 @@ def _fetch_agent_trace_data(db: Session, user_id: int) -> Dict[str, Any]:
 
 @router.post("/run-digest-now")
 async def trigger_daily_digest_now(
+    background_tasks: BackgroundTasks,
     admin: User = Depends(get_admin_user)
 ):
     """
     Manually trigger daily digest batch job for all active users.
 
-    run_daily_digest_job() offloads sync DB + agent work to a threadpool
-    (via asyncio.run in a worker), so this endpoint does not block the
-    FastAPI event loop.
+    - Returns immediately (queued via BackgroundTasks).
+    - Enforces a 1-hour cooldown to prevent cost exhaustion / DoS.
     """
+    # Cooldown check
+    if cache.get(DIGEST_COOLDOWN_KEY):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Daily digest was recently triggered. Please wait up to 1 hour before retrying."
+        )
+
+    # Set cooldown immediately so concurrent requests are blocked
+    cache.set(DIGEST_COOLDOWN_KEY, True, ttl_seconds=DIGEST_COOLDOWN_SECONDS)
+
     from app.scheduler.daily_digest import run_daily_digest_job
-    results = await run_daily_digest_job()
-    return {"status": "success", "processed": results}
+
+    # Queue the heavy job in the background so the HTTP response is instant
+    background_tasks.add_task(run_daily_digest_job)
+
+    logger.info(f"Admin {admin.id} queued daily digest job (1-hour cooldown activated)")
+    return {
+        "status": "queued",
+        "message": "Daily digest job has been queued and will run in the background."
+    }
 
 
 @router.get("/agent-trace/{user_id}")
