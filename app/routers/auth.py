@@ -42,19 +42,15 @@ def _set_access_cookie(response: Response, access_token: str) -> None:
     max_age = int(getattr(settings, "ACCESS_TOKEN_EXPIRE_MINUTES", 1440)) * 60
 
     # Dynamic Secure flag:
-    # - False on local HTTP (DEBUG=True or weak/default JWT_SECRET)
-    # - True in production (strong JWT_SECRET that is not the default placeholder)
-    is_production = (
-        bool(getattr(settings, "JWT_SECRET", None))
-        and len(settings.JWT_SECRET) >= 32
-        and not settings.JWT_SECRET.startswith("your_jwt")
-    )
+    # - False on local HTTP (DEBUG=True)
+    # - True in production (DEBUG=False)
+    is_production = not getattr(settings, "DEBUG", True)
 
     response.set_cookie(
         key=ACCESS_TOKEN_COOKIE,
         value=access_token,
         httponly=True,
-        secure=is_production,          # ← Bug #11 fix
+        secure=is_production,
         samesite="lax",
         max_age=max_age,
         path="/",
@@ -80,6 +76,15 @@ def register(
     db: Session = Depends(get_db),
 ):
     """Register a new learner account (JSON body)."""
+    
+    # 🔒 SECURITY FIX: Prevent hijacking of system/guest accounts
+    RESERVED_EMAILS = {"guest@example.com", "admin@smartreco.ai", "demo@smartreco.ai"}
+    if user_in.email.lower() in RESERVED_EMAILS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This email address is reserved for system use.",
+        )
+
     client_ip = request.client.host if request.client else "unknown"
     rate_key = f"auth_register:{client_ip}"
     if not _check_auth_rate_limit(rate_key):

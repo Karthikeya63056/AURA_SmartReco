@@ -115,7 +115,7 @@ def _extract_json(text: str) -> dict:
     - Pure JSON responses
     - JSON wrapped in ```json ... ``` markdown fences
     - JSON preceded/followed by explanatory text or thinking blocks
-    - Multiple JSON objects (takes the first valid one)
+    - Braces inside JSON string values (e.g. {"reason": "looking for {AI}"})
     """
     if not text:
         return {}
@@ -135,21 +135,16 @@ def _extract_json(text: str) -> dict:
         except (json.JSONDecodeError, ValueError):
             pass
 
-    # Strategy 3: Find the first { ... } block using brace matching
+    # Strategy 3: Find the outermost { and } block using find() and rfind()
+    # This fixes the bug where a naive brace counter breaks on braces inside strings.
     start_idx = stripped.find("{")
-    if start_idx != -1:
-        depth = 0
-        for i in range(start_idx, len(stripped)):
-            if stripped[i] == "{":
-                depth += 1
-            elif stripped[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    candidate = stripped[start_idx:i + 1]
-                    try:
-                        return json.loads(candidate)
-                    except (json.JSONDecodeError, ValueError):
-                        break
+    end_idx = stripped.rfind("}")
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        candidate = stripped[start_idx:end_idx + 1]
+        try:
+            return json.loads(candidate)
+        except (json.JSONDecodeError, ValueError):
+            pass
 
     # Strategy 4: Return empty dict as final fallback
     logger.warning(f"Could not extract JSON from LLM response (first 200 chars): {stripped[:200]}")
