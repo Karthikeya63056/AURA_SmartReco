@@ -72,8 +72,8 @@
       if (window.AURA_UI) AURA_UI.toast('Email and password are required', 'error');
       return;
     }
-    if (password.length < 6) {
-      if (window.AURA_UI) AURA_UI.toast('Password must be at least 6 characters', 'error');
+    if (password.length < 8) {
+      if (window.AURA_UI) AURA_UI.toast('Password must be at least 8 characters', 'error');
       return;
     }
 
