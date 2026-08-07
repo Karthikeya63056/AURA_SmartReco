@@ -18,7 +18,7 @@
       <ul class="nav-links">
         <li><a href="/catalog">Courses</a></li>
         <li><a href="/catalog">Catalog</a></li>
-        {% if user and user.role == 'admin' %}
+        {% if user and user.is_admin %}
         <li><a href="/admin/dashboard">Admin</a></li>
         {% endif %}
       </ul>
@@ -26,7 +26,7 @@
       <div class="nav-actions">
         {% if user %}
           <span class="text-muted" style="font-size:0.85rem;">{{ user.email.split('@')[0] }}</span>
-          <a href="/api/auth/logout" class="btn btn-ghost btn-sm">Sign out</a>
+          <a href="#" class="btn btn-ghost btn-sm" id="logoutBtn">Sign out</a>
         {% else %}
           <a href="/login" class="btn btn-ghost btn-sm">Sign in</a>
           <a href="/register" class="btn btn-primary btn-sm">Get started</a>
@@ -46,10 +46,38 @@
 
   <script src="/static/js/tracker.js"></script>
   <script>
+    // Attach JWT to all fetch requests automatically
+    const originalFetch = window.fetch;
+    window.fetch = function (url, options = {}) {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        options.headers = options.headers || {};
+        if (options.headers instanceof Headers) {
+          options.headers.set('Authorization', 'Bearer ' + token);
+        } else {
+          options.headers['Authorization'] = 'Bearer ' + token;
+        }
+      }
+      return originalFetch(url, options);
+    };
+
+    // Logout handler
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        localStorage.removeItem('access_token');
+        window.location.href = '/';
+      });
+    }
+
+    // Nav scroll effect
     const nav = document.getElementById('navWrapper');
-    window.addEventListener('scroll', () => {
-      nav.classList.toggle('scrolled', window.scrollY > 20);
-    });
+    if (nav) {
+      window.addEventListener('scroll', () => {
+        nav.classList.toggle('scrolled', window.scrollY > 20);
+      });
+    }
   </script>
   {% block scripts %}{% endblock %}
 </body>

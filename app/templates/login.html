@@ -7,10 +7,11 @@
     <h1>Welcome back</h1>
     <p class="subtitle">Sign in to continue your learning journey</p>
 
-    <form method="POST" action="/api/auth/login">
+    <form id="loginForm">
       <div class="form-group">
         <label for="email">Email</label>
-        <input type="email" id="email" name="email" placeholder="you@example.com" required>
+        <!-- name="username" is required by OAuth2PasswordRequestForm -->
+        <input type="email" id="email" name="username" placeholder="you@example.com" required>
       </div>
       <div class="form-group">
         <label for="password">Password</label>
@@ -26,4 +27,30 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('loginForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  const formData = new FormData(this);
+  try {
+    // Router prefix is /auth (not /api/auth)
+    const res = await fetch('/auth/login', {
+      method: 'POST',
+      body: formData
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.detail || 'Login failed');
+      return;
+    }
+    const data = await res.json();
+    localStorage.setItem('access_token', data.access_token);
+    window.location.href = '/dashboard';
+  } catch (err) {
+    alert('Something went wrong. Please try again.');
+  }
+});
+</script>
 {% endblock %}

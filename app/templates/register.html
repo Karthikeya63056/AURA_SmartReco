@@ -7,7 +7,7 @@
     <h1>Create account</h1>
     <p class="subtitle">Start your personalized learning journey</p>
 
-    <form method="POST" action="/api/auth/register">
+    <form id="registerForm">
       <div class="form-group">
         <label for="email">Email</label>
         <input type="email" id="email" name="email" placeholder="you@example.com" required>
@@ -26,4 +26,47 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('registerForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+
+  try {
+    // Backend expects JSON body at /auth/register
+    const res = await fetch('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.detail || 'Registration failed');
+      return;
+    }
+
+    // Auto-login after successful register
+    const formData = new FormData();
+    formData.append('username', email);
+    formData.append('password', password);
+    const loginRes = await fetch('/auth/login', {
+      method: 'POST',
+      body: formData
+    });
+
+    if (loginRes.ok) {
+      const data = await loginRes.json();
+      localStorage.setItem('access_token', data.access_token);
+      window.location.href = '/dashboard';
+    } else {
+      window.location.href = '/login';
+    }
+  } catch (err) {
+    alert('Something went wrong. Please try again.');
+  }
+});
+</script>
 {% endblock %}
