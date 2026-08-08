@@ -1,6 +1,6 @@
 {#
   Expects: recommendation dict with:
-    narrative, product_ids (list), quality_score?, trigger_reason?
+    narrative, product_ids (list), quality_score?, trigger_reason?, id?
   Optional:
     show_chips (default true)
     empty_message (string)
@@ -9,11 +9,17 @@
 {% set show_chips = show_chips if show_chips is defined else true %}
 {% set empty_message = empty_message if empty_message is defined else "Start exploring courses. AURA will analyze your behavior and generate a personalized recommendation here." %}
 {% set card_class = card_class if card_class is defined else "" %}
+{% set rec_id = recommendation.id if recommendation and recommendation.id is defined else 0 %}
 
-<div class="rec-side-card {{ card_class }}">
+<div class="rec-side-card {{ card_class }}" data-recommendation-id="{{ rec_id }}">
   <div class="rec-label">
     <span class="dot pulse-ring"></span>
     AURA Recommendation
+    {% if recommendation and recommendation.narrative %}
+    <button class="rec-dismiss-btn" title="Not interested"
+            onclick="handleRecommendationDismiss(this)"
+            data-recommendation-id="{{ rec_id }}">✕</button>
+    {% endif %}
   </div>
 
   <div class="rec-narrative" id="recNarrative">
@@ -31,7 +37,10 @@
     {% set reasons = recommendation.product_reasons if recommendation.product_reasons is defined else [] %}
     {% for pid in recommendation.product_ids[:4] %}
       <div class="rec-chip-group">
-        <a href="/course/{{ pid }}" class="rec-chip">View course</a>
+        <a href="/course/{{ pid }}" class="rec-chip"
+           data-recommendation-id="{{ rec_id }}"
+           data-product-id="{{ pid }}"
+           onclick="handleRecommendationClick(this)">View course</a>
         {% if reasons and loop.index0 < reasons|length and reasons[loop.index0] %}
           <span class="rec-reason-chip">{{ reasons[loop.index0] }}</span>
         {% endif %}
@@ -51,3 +60,29 @@
   </div>
   {% endif %}
 </div>
+
+<script>
+function handleRecommendationClick(el) {
+  var recId = el.getAttribute('data-recommendation-id');
+  var prodId = el.getAttribute('data-product-id');
+  if (window.trackRecommendationClick) {
+    window.trackRecommendationClick(recId, prodId);
+  }
+  // Let the default <a> navigation proceed
+}
+
+function handleRecommendationDismiss(el) {
+  var recId = el.getAttribute('data-recommendation-id');
+  if (window.trackRecommendationDismiss) {
+    window.trackRecommendationDismiss(recId);
+  }
+  // Fade out the card
+  var card = el.closest('.rec-side-card');
+  if (card) {
+    card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+    card.style.opacity = '0';
+    card.style.transform = 'translateY(-8px)';
+    setTimeout(function() { card.style.display = 'none'; }, 300);
+  }
+}
+</script>

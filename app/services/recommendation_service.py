@@ -75,6 +75,8 @@ class RecommendationService:
             "events_summary": events_summary_str,
             "recurring_patterns": recurring_patterns_str,
             "user_profile": {},
+            "user_skills": [],
+            "persuasion_style": "hybrid",
             "search_query": "",
             "candidates": [],
             "quality_score": 0,

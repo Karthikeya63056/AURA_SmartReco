@@ -75,6 +75,63 @@
     </a>
   </div>
 
+  {# ── Recommendation Performance Metrics ── #}
+  <div class="section-header" style="padding-inline:0;">
+    <h2 class="section-title">Recommendation Performance</h2>
+  </div>
+
+  <div class="admin-stats stagger" style="margin-bottom: var(--space-6);">
+    <div class="stat-card fade-in">
+      <div class="stat-value">{{ rec_count | default(0) }}</div>
+      <div class="stat-label">Total Recs</div>
+    </div>
+    <div class="stat-card fade-in">
+      <div class="stat-value" style="color: var(--cyan);">{{ total_clicks | default(0) }}</div>
+      <div class="stat-label">Clicks</div>
+    </div>
+    <div class="stat-card fade-in">
+      <div class="stat-value">{{ total_dismisses | default(0) }}</div>
+      <div class="stat-label">Dismisses</div>
+    </div>
+    <div class="stat-card fade-in">
+      <div class="stat-value" style="color: var(--aurora-2, #ec4899);">{{ overall_ctr | default(0) }}%</div>
+      <div class="stat-label">Overall CTR</div>
+    </div>
+  </div>
+
+  {% if rec_metrics is defined and rec_metrics %}
+  <div class="glass-table-wrapper" style="margin-bottom: var(--space-10);">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Rec ID</th>
+          <th>User</th>
+          <th>Trigger</th>
+          <th>Score</th>
+          <th>Clicks</th>
+          <th>Dismisses</th>
+          <th>CTR</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in rec_metrics %}
+        <tr>
+          <td>#{{ rec.id }}</td>
+          <td>{{ rec.user_id }}</td>
+          <td><span class="badge">{{ rec.trigger_reason }}</span></td>
+          <td>{{ rec.quality_score }}</td>
+          <td style="color: var(--cyan);">{{ rec.clicks }}</td>
+          <td>{{ rec.dismisses }}</td>
+          <td>
+            <span class="badge {% if rec.ctr > 0 %}badge-cyan{% endif %}">{{ rec.ctr }}%</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
   {% if recent_events is defined and recent_events %}
   <div class="section-header" style="padding-inline:0;">
     <h2 class="section-title">Recent platform events</h2>

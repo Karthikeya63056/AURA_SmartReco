@@ -7,6 +7,8 @@ class AgentState(TypedDict):
     events_summary: str
     recurring_patterns: str
     user_profile: Dict[str, Any]  # {"interests": [...], "skill_level": "...", "intent": "..."}
+    user_skills: List[str]
+    persuasion_style: str  # 'analytical' | 'social' | 'motivational' | 'practical' | 'hybrid'
     search_query: str
     candidates: List[Dict[str, Any]]
     quality_score: int

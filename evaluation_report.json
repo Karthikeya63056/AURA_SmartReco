@@ -1,0 +1,251 @@
+{
+  "timestamp": "2026-08-08T07:53:09.894916+00:00",
+  "total_personas": 8,
+  "triggered_count": 8,
+  "metrics": {
+    "precision_at_5": 0.9583,
+    "recall_at_5": 0.9167,
+    "narrative_relevance_score": 0.78,
+    "avg_duration_sec": 171.63,
+    "overall_score": 0.8902
+  },
+  "persona_results": [
+    {
+      "persona": "Agent Architecture Builder",
+      "triggered": true,
+      "trigger_reason": "high_intent",
+      "quality_score": 88,
+      "precision": 1.0,
+      "recall": 1.0,
+      "narrative_score": 0.8,
+      "recommended_ids": [
+        1,
+        10,
+        7
+      ],
+      "recommended_titles": [
+        "Master Class: Agentic AI Systems with LangGraph & LangChain",
+        "Building Autonomous Multi-Agent Workflows",
+        "Advanced Prompt Engineering & Agent Design Patterns"
+      ],
+      "product_reasons": [
+        "Matched your search for 'autonomous AI agents LangGraph multi-age'",
+        "Aligns with your interest in AI & Agents",
+        "Appropriate for your Advanced level"
+      ],
+      "ground_truth": [
+        "Master Class: Agentic AI Systems with LangGraph & LangChain",
+        "Building Autonomous Multi-Agent Workflows",
+        "Advanced Prompt Engineering & Agent Design Patterns"
+      ],
+      "duration_sec": 161.03
+    },
+    {
+      "persona": "RAG & Vector Search Engineer",
+      "triggered": true,
+      "trigger_reason": "high_intent",
+      "quality_score": 90,
+      "precision": 1.0,
+      "recall": 0.6667,
+      "narrative_score": 0.67,
+      "recommended_ids": [
+        2,
+        12
+      ],
+      "recommended_titles": [
+        "Production RAG Architecture & Vector DB Optimization",
+        "ChromaDB & Vector Store Deep Dive for AI Engineers"
+      ],
+      "product_reasons": [
+        "Matched your search for 'dense embeddings cross-encoder reranking'",
+        "Aligns with your interest in Database & AI"
+      ],
+      "ground_truth": [
+        "Production RAG Architecture & Vector DB Optimization",
+        "ChromaDB & Vector Store Deep Dive for AI Engineers",
+        "Building Production Recommendation Systems with AI"
+      ],
+      "duration_sec": 192.2
+    },
+    {
+      "persona": "Data Science & ML Beginner",
+      "triggered": true,
+      "trigger_reason": "high_intent",
+      "quality_score": 80,
+      "precision": 1.0,
+      "recall": 1.0,
+      "narrative_score": 0.83,
+      "recommended_ids": [
+        8,
+        6,
+        3
+      ],
+      "recommended_titles": [
+        "Python for Data Science & Machine Learning Masterclass",
+        "Deep Learning & Neural Networks Fundamentals",
+        "Generative AI Application Development with Python"
+      ],
+      "product_reasons": [
+        "Matched your search for 'beginner machine learning python data sc'",
+        "Aligns with your interest in AI & Machine Learning",
+        "Appropriate for your Beginner level"
+      ],
+      "ground_truth": [
+        "Python for Data Science & Machine Learning Masterclass",
+        "Deep Learning & Neural Networks Fundamentals",
+        "Generative AI Application Development with Python"
+      ],
+      "duration_sec": 122.27
+    },
+    {
+      "persona": "MLOps & Cloud Infrastructure Engineer",
+      "triggered": true,
+      "trigger_reason": "high_intent",
+      "quality_score": 75,
+      "precision": 1.0,
+      "recall": 1.0,
+      "narrative_score": 0.77,
+      "recommended_ids": [
+        4,
+        18,
+        25
+      ],
+      "recommended_titles": [
+        "MLOps Bootcamp: CI/CD, Model Monitoring & Kubernetes",
+        "Docker & Kubernetes for Machine Learning Engineers",
+        "Kubernetes & Helm Masterclass for DevOps"
+      ],
+      "product_reasons": [
+        "Matched your search for 'MLOps model drift MLflow Kubernetes CI C'",
+        "Aligns with your interest in MLOps & Cloud",
+        "Appropriate for your Intermediate level"
+      ],
+      "ground_truth": [
+        "MLOps Bootcamp: CI/CD, Model Monitoring & Kubernetes",
+        "Docker & Kubernetes for Machine Learning Engineers",
+        "Kubernetes & Helm Masterclass for DevOps"
+      ],
+      "duration_sec": 170.71
+    },
+    {
+      "persona": "Full-Stack AI Web Developer",
+      "triggered": true,
+      "trigger_reason": "high_intent",
+      "quality_score": 92,
+      "precision": 1.0,
+      "recall": 1.0,
+      "narrative_score": 0.87,
+      "recommended_ids": [
+        5,
+        11,
+        17
+      ],
+      "recommended_titles": [
+        "Full-Stack LLM Applications with FastAPI & React",
+        "FastAPI Microservices Masterclass",
+        "Async Python Programming & High-Performance AsyncIO"
+      ],
+      "product_reasons": [
+        "Matched your search for 'FastAPI React fullstack LLM async develo'",
+        "Aligns with your interest in Backend Dev",
+        "Appropriate for your Intermediate level"
+      ],
+      "ground_truth": [
+        "Full-Stack LLM Applications with FastAPI & React",
+        "FastAPI Microservices Masterclass",
+        "Async Python Programming & High-Performance AsyncIO"
+      ],
+      "duration_sec": 135.82
+    },
+    {
+      "persona": "LLM Fine-Tuning & NLP Specialist",
+      "triggered": true,
+      "trigger_reason": "high_intent",
+      "quality_score": 90,
+      "precision": 1.0,
+      "recall": 1.0,
+      "narrative_score": 0.8,
+      "recommended_ids": [
+        9,
+        20,
+        13
+      ],
+      "recommended_titles": [
+        "Fine-Tuning Open Source LLMs: LLaMA & Mistral",
+        "Natural Language Processing from Scratch with Transformers",
+        "Reinforcement Learning from Human Feedback (RLHF)"
+      ],
+      "product_reasons": [
+        "Matched your search for 'NLP transformers PyTorch LLM fine-tuning'",
+        "Aligns with your interest in AI & NLP",
+        "Appropriate for your Intermediate level"
+      ],
+      "ground_truth": [
+        "Fine-Tuning Open Source LLMs: LLaMA & Mistral",
+        "Natural Language Processing from Scratch with Transformers",
+        "Reinforcement Learning from Human Feedback (RLHF)"
+      ],
+      "duration_sec": 156.09
+    },
+    {
+      "persona": "AI Security & Safety Specialist",
+      "triggered": true,
+      "trigger_reason": "high_intent",
+      "quality_score": 45,
+      "precision": 1.0,
+      "recall": 1.0,
+      "narrative_score": 0.77,
+      "recommended_ids": [
+        16,
+        7,
+        3
+      ],
+      "recommended_titles": [
+        "AI Security, Safety & Red Teaming for Enterprise",
+        "Advanced Prompt Engineering & Agent Design Patterns",
+        "Generative AI Application Development with Python"
+      ],
+      "product_reasons": [
+        "Matched your search for 'enterprise AI safety red teaming prompt '",
+        "Aligns with your interest in AI & Agents",
+        "Appropriate for your Advanced level"
+      ],
+      "ground_truth": [
+        "AI Security, Safety & Red Teaming for Enterprise",
+        "Advanced Prompt Engineering & Agent Design Patterns",
+        "Generative AI Application Development with Python"
+      ],
+      "duration_sec": 204.49
+    },
+    {
+      "persona": "Data Engineer & ETL Architect",
+      "triggered": true,
+      "trigger_reason": "high_intent",
+      "quality_score": 42,
+      "precision": 0.6667,
+      "recall": 0.6667,
+      "narrative_score": 0.73,
+      "recommended_ids": [
+        15,
+        10,
+        8
+      ],
+      "recommended_titles": [
+        "Data Engineering Pipelines with Apache Airflow & Spark",
+        "Building Autonomous Multi-Agent Workflows",
+        "Python for Data Science & Machine Learning Masterclass"
+      ],
+      "product_reasons": [
+        "Matched your search for 'data engineering ETL pipeline orchestrat'",
+        "Aligns with your interest in AI & Agents",
+        "Appropriate for your Intermediate level"
+      ],
+      "ground_truth": [
+        "Data Engineering Pipelines with Apache Airflow & Spark",
+        "Python for Data Science & Machine Learning Masterclass",
+        "Async Python Programming & High-Performance AsyncIO"
+      ],
+      "duration_sec": 230.46
+    }
+  ]
+}

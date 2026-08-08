@@ -1,4 +1,6 @@
 import os
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+
 import logging
 import chromadb
 from chromadb.api.models.Collection import Collection

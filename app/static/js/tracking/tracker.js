@@ -176,6 +176,19 @@
     });
   }
 
+  function trackRecommendationClick(recommendationId, productId) {
+    track('rec_click', {
+      recommendation_id: safeParseInt(recommendationId),
+      product_id: safeParseInt(productId),
+    });
+  }
+
+  function trackRecommendationDismiss(recommendationId) {
+    track('rec_dismiss', {
+      recommendation_id: safeParseInt(recommendationId),
+    });
+  }
+
   function bindImpressionObserver() {
     if (!('IntersectionObserver' in global)) return;
 
@@ -277,5 +290,11 @@
     trackSearch: trackSearch,
     trackWishlist: trackWishlist,
     trackSyllabusView: trackSyllabusView,
+    trackRecommendationClick: trackRecommendationClick,
+    trackRecommendationDismiss: trackRecommendationDismiss,
   };
-})(window);
+
+  // Expose globally for inline onclick handlers
+  global.trackRecommendationClick = trackRecommendationClick;
+  global.trackRecommendationDismiss = trackRecommendationDismiss;
+})(window);

@@ -14,6 +14,8 @@ class Product(Base):
     rating = Column(Float, nullable=False, default=4.5)
     description = Column(Text, nullable=False)
     tags = Column(JSON, nullable=False, default=list)  # ["python", "ai", "langgraph"]
+    prerequisites = Column(JSON, nullable=True, default=list)  # ["Python Basics", "Data Structures"]
+    skills_taught = Column(JSON, nullable=True, default=list)  # ["Machine Learning", "Model Evaluation"]
     syllabus = Column(JSON, nullable=True, default=list)
     metadata_json = Column(JSON, nullable=True, default=dict)
     needs_reindex = Column(Boolean, default=False, nullable=False)

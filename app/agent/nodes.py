@@ -6,7 +6,19 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.agent.state import AgentState
-from app.agent.prompts import BEHAVIOR_ANALYSIS_PROMPT, EVALUATOR_PROMPT, PERSUASIVE_PROMPT, QUERY_REWRITE_PROMPT, NARRATIVE_FIX_INSTRUCTION, REASON_GENERATION_PROMPT
+from app.agent.prompts import (
+    BEHAVIOR_ANALYSIS_PROMPT,
+    EVALUATOR_PROMPT,
+    PERSUASIVE_PROMPT,
+    PERSUASIVE_PROMPT_ANALYTICAL,
+    PERSUASIVE_PROMPT_SOCIAL,
+    PERSUASIVE_PROMPT_MOTIVATIONAL,
+    PERSUASIVE_PROMPT_PRACTICAL,
+    PERSUASIVE_PROMPT_HYBRID,
+    QUERY_REWRITE_PROMPT,
+    NARRATIVE_FIX_INSTRUCTION,
+    REASON_GENERATION_PROMPT,
+)
 from app.core.llm import generate_chat_completion, get_llm_client
 from app.services.product_service import search_products_vector, get_product
 from app.models.recommendation import Recommendation
@@ -224,6 +236,108 @@ def _build_recurring_pattern_summary(events: list) -> str:
     return "\n".join(lines)
 
 
+def _infer_user_skills(events_summary: str, user_profile: dict) -> list[str]:
+    """
+    Infer user's baseline/existing skills from search terms, event text, and user profile.
+    Returns a unique list of skill strings.
+    """
+    skills = set()
+    interests = [i.lower() for i in user_profile.get("interests", [])]
+    skill_level = user_profile.get("skill_level", "Intermediate")
+    summary_lower = (events_summary or "").lower()
+
+    # Domain & Interest heuristics
+    if any("python" in i or "data" in i or "ai" in i for i in interests) or "python" in summary_lower:
+        skills.add("Python Basics")
+    if any("javascript" in i or "web" in i or "react" in i for i in interests) or "js" in summary_lower or "javascript" in summary_lower:
+        skills.add("JavaScript Basics")
+    if any("docker" in i or "cloud" in i or "mlops" in i for i in interests) or "docker" in summary_lower:
+        skills.add("Docker Basics")
+    if any("rest" in i or "api" in i or "backend" in i for i in interests) or "api" in summary_lower:
+        skills.add("REST APIs")
+
+    # Skill level baseline
+    if skill_level in ("Intermediate", "Advanced"):
+        skills.add("Python Basics")
+        skills.add("Prompt Engineering")
+        skills.add("Vector Search")
+    if skill_level == "Advanced":
+        skills.add("PyTorch")
+        skills.add("Deep Learning")
+        skills.add("RAG")
+        skills.add("LLM APIs")
+
+    # Text keyword matching from summary
+    if "rag" in summary_lower or "chroma" in summary_lower or "vector" in summary_lower:
+        skills.add("RAG")
+        skills.add("Vector Search")
+    if "langgraph" in summary_lower or "agent" in summary_lower:
+        skills.add("LLM APIs")
+        skills.add("Prompt Engineering")
+    if "pytorch" in summary_lower or "neural" in summary_lower:
+        skills.add("Deep Learning")
+        skills.add("PyTorch")
+
+    if not skills:
+        skills.add("Python Basics")
+
+    return list(skills)
+
+
+def _infer_persuasion_style(events_summary: str, user_profile: dict) -> str:
+    """
+    Infer persuasion style from event history and user profile.
+    Returns: 'analytical' | 'social' | 'motivational' | 'practical' | 'hybrid'
+    """
+    signals = {
+        "analytical": 0,
+        "social": 0,
+        "motivational": 0,
+        "practical": 0,
+    }
+    summary_lower = (events_summary or "").lower()
+
+    analytical_keywords = ["syllabus", "curriculum", "architecture", "performance", "benchmark", "cost", "roi", "deep dive", "metrics"]
+    social_keywords = ["community", "cohort", "review", "rating", "testimonial", "popular", "trending", "students", "instructor"]
+    motivational_keywords = ["career", "growth", "challenge", "master", "transform", "future", "roadmap", "success"]
+    practical_keywords = ["job", "project", "portfolio", "hands-on", "apply", "build", "fastapi", "code", "implementation"]
+
+    for kw in analytical_keywords:
+        if kw in summary_lower:
+            signals["analytical"] += 1
+    for kw in social_keywords:
+        if kw in summary_lower:
+            signals["social"] += 1
+    for kw in motivational_keywords:
+        if kw in summary_lower:
+            signals["motivational"] += 1
+    for kw in practical_keywords:
+        if kw in summary_lower:
+            signals["practical"] += 1
+
+    intent = str(user_profile.get("intent", "")).lower()
+    skill_level = str(user_profile.get("skill_level", "")).lower()
+
+    if "career" in intent or "upskilling" in intent:
+        signals["practical"] += 1
+        signals["motivational"] += 1
+    if "explore" in intent or "hobby" in intent:
+        signals["social"] += 1
+
+    if skill_level in ("advanced", "expert"):
+        signals["analytical"] += 1
+
+    max_score = max(signals.values())
+    if max_score == 0:
+        return "hybrid"
+
+    top_styles = [s for s, v in signals.items() if v == max_score]
+    if len(top_styles) > 1:
+        return "hybrid"
+
+    return top_styles[0]
+
+
 async def analyze_behavior_node(state: AgentState) -> Dict[str, Any]:
     """Node 1: Analyze user behavior events via Mesh API."""
     logger.info(f"[Node 1] Analyzing behavior for user {state['user_id']} using model {settings.DEFAULT_CHAT_MODEL}")
@@ -255,14 +369,23 @@ async def analyze_behavior_node(state: AgentState) -> Dict[str, Any]:
         }
         search_query = data.get("search_query", "artificial intelligence machine learning courses")
 
+        user_skills = _infer_user_skills(events_summary, user_profile)
+        persuasion_style = _infer_persuasion_style(events_summary, user_profile)
+        logger.info(f"[Node 1] Inferred user skills: {user_skills} | Persuasion style: {persuasion_style}")
+
         return {
             "user_profile": user_profile,
+            "user_skills": user_skills,
+            "persuasion_style": persuasion_style,
             "search_query": search_query
         }
     except Exception as e:
         logger.error(f"Error in analyze_behavior_node: {str(e)}")
+        fallback_profile = {"interests": ["AI"], "skill_level": "Intermediate", "intent": "Upskilling"}
         return {
-            "user_profile": {"interests": ["AI"], "skill_level": "Intermediate", "intent": "Upskilling"},
+            "user_profile": fallback_profile,
+            "user_skills": _infer_user_skills(events_summary, fallback_profile),
+            "persuasion_style": _infer_persuasion_style(events_summary, fallback_profile),
             "search_query": "AI machine learning courses"
         }
 
@@ -318,6 +441,42 @@ async def retrieve_candidates_node(state: AgentState) -> Dict[str, Any]:
         logger.info("[Node 2] Filtered search returned 0 candidates, falling back to unfiltered search")
         candidates = search_products_vector(query_text=search_query, n_results=n_results)
 
+    # Soft filter: adjust candidate similarity/distance ranking based on unmet prerequisites
+    user_skills = state.get("user_skills", [])
+    user_skills_lower = {s.lower() for s in user_skills}
+
+    if candidates:
+        candidate_ids = [c["id"] for c in candidates]
+        db: Session = SessionLocal()
+        try:
+            db_products = db.query(Product).filter(Product.id.in_(candidate_ids)).all()
+            prod_map = {p.id: p for p in db_products}
+        finally:
+            db.close()
+
+        for c in candidates:
+            p = prod_map.get(c["id"])
+            if not p:
+                continue
+
+            prereqs = getattr(p, "prerequisites", []) or []
+            skills_taught = getattr(p, "skills_taught", []) or []
+
+            unmet = []
+            for prereq in prereqs:
+                if not any(prereq.lower() in us or us in prereq.lower() for us in user_skills_lower):
+                    unmet.append(prereq)
+
+            c["prerequisites"] = prereqs
+            c["skills_taught"] = skills_taught
+            c["unmet_prerequisites"] = unmet
+
+            if unmet and "distance" in c:
+                c["distance"] = float(c["distance"]) * (1.0 + 0.3 * len(unmet))
+                logger.info(f"[Node 2] Course #{c['id']} '{p.title}' has {len(unmet)} unmet prereq(s) {unmet}; distance penalized")
+
+        candidates.sort(key=lambda x: x.get("distance", 0.0))
+
     return {"candidates": candidates}
 
 
@@ -352,6 +511,37 @@ def _generate_template_reasons(
     finally:
         db.close()
     return reasons
+
+
+def _extract_json_from_llm(text: str) -> list | None:
+    """Try to extract a JSON array or line-based list from the LLM response."""
+    if not text:
+        return None
+    # Direct JSON parse
+    try:
+        data = json.loads(text)
+        if isinstance(data, list):
+            return data
+    except Exception:
+        pass
+
+    # Regex search for JSON array [...]
+    match = re.search(r'\[.*\]', text, re.DOTALL)
+    if match:
+        try:
+            data = json.loads(match.group())
+            if isinstance(data, list):
+                return data
+        except Exception:
+            pass
+
+    # Line-by-line fallback
+    lines = [line.strip().lstrip("-*123456789. ").strip('"').strip("'") for line in text.split("\n") if line.strip()]
+    cleaned_lines = [l for l in lines if l and not l.startswith("[") and not l.startswith("]")]
+    if cleaned_lines:
+        return cleaned_lines
+
+    return None
 
 
 def _generate_reasons_llm(
@@ -390,9 +580,9 @@ def _generate_reasons_llm(
             temperature=0.2,
             max_tokens=150,
         )
-        reasons = _extract_json(response_text)
+        reasons = _extract_json_from_llm(response_text)
         if isinstance(reasons, list) and len(reasons) == len(product_ids):
-            return [str(r)[:80] for r in reasons]
+            return [str(r).strip().strip('"').strip("'")[:80] for r in reasons]
         logger.warning(f"[Reasons] LLM returned mismatched count: expected {len(product_ids)}, got {len(reasons) if isinstance(reasons, list) else 'non-list'}")
         return None
     except Exception as e:
@@ -478,6 +668,9 @@ async def generate_narrative_node(state: AgentState) -> Dict[str, Any]:
     
     logger.info(f"[Node 4] Writing persuasive narrative for products {recommended_ids} using model {settings.MAIN_CHAT_MODEL}")
 
+    user_skills = state.get("user_skills", [])
+    user_skills_str = ", ".join(user_skills) if user_skills else "Python Basics"
+
     db: Session = SessionLocal()
     courses_info = []
     product_titles = []
@@ -486,17 +679,37 @@ async def generate_narrative_node(state: AgentState) -> Dict[str, Any]:
             p = get_product(db, pid)
             if p:
                 product_titles.append(p.title)
-                courses_info.append(f"- **{p.title}** ({p.level} | {p.category}): {p.description}")
+                prereq_list = getattr(p, "prerequisites", []) or []
+                taught_list = getattr(p, "skills_taught", []) or []
+                prereq_str = ", ".join(prereq_list) if prereq_list else "None (Beginner Friendly)"
+                taught_str = ", ".join(taught_list) if taught_list else "Domain Skills"
+                courses_info.append(
+                    f"- **{p.title}** ({p.level} | {p.category}): {p.description}\n"
+                    f"  * Prerequisites: {prereq_str}\n"
+                    f"  * Skills You'll Learn: {taught_str}"
+                )
     finally:
         db.close()
 
-    courses_text = "\n".join(courses_info) if courses_info else "Top curated AI courses."
+    courses_text = "\n\n".join(courses_info) if courses_info else "Top curated AI courses."
 
-    base_prompt = PERSUASIVE_PROMPT.format(
+    persuasion_style = state.get("persuasion_style", "hybrid")
+    prompt_map = {
+        "analytical": PERSUASIVE_PROMPT_ANALYTICAL,
+        "social": PERSUASIVE_PROMPT_SOCIAL,
+        "motivational": PERSUASIVE_PROMPT_MOTIVATIONAL,
+        "practical": PERSUASIVE_PROMPT_PRACTICAL,
+        "hybrid": PERSUASIVE_PROMPT_HYBRID,
+    }
+    selected_prompt = prompt_map.get(persuasion_style, PERSUASIVE_PROMPT_HYBRID)
+    logger.info(f"[Node 4] Using '{persuasion_style}' persuasion prompt variant")
+
+    base_prompt = selected_prompt.format(
         intent=sanitize_prompt_input(user_profile.get("intent", "Upskilling"), 80),
         skill_level=sanitize_prompt_input(user_profile.get("skill_level", "Intermediate"), 50),
         interests=sanitize_prompt_input(", ".join(user_profile.get("interests", [])), 300),
-        recommended_courses_text=sanitize_prompt_input(courses_text, 2000)
+        user_skills=sanitize_prompt_input(user_skills_str, 300),
+        recommended_courses_text=sanitize_prompt_input(courses_text, 2500)
     )
 
     fix_instruction = state.get("critique_feedback", "")
@@ -684,20 +897,20 @@ def _rewrite_query(
             response = client.chat.completions.create(
                 model=settings.DEFAULT_CHAT_MODEL,
                 messages=[
-                    {"role": "system", "content": "You are a helpful search query rewriter."},
+                    {"role": "system", "content": "You are a helpful search query rewriter. Return only the rewritten search query."},
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.3,
-                max_tokens=30,
+                temperature=0.5,
+                max_tokens=40,
             )
             rewritten = response.choices[0].message.content.strip()
-            # Sanitize: remove quotes, newlines, and truncate
-            rewritten = rewritten.strip('"').strip("'").strip()
-            # Limit to 10 words
+            # Remove prefix labels, Markdown backticks, quotes
+            rewritten = re.sub(r'^(rewritten\s*query\s*:?|query\s*:?|search\s*query\s*:?)', '', rewritten, flags=re.IGNORECASE).strip()
+            rewritten = rewritten.strip('`').strip('"').strip("'").strip()
             words = rewritten.split()
             if len(words) > 10:
                 rewritten = " ".join(words[:10])
-            if rewritten and len(rewritten) > 3:
+            if rewritten and len(rewritten) > 3 and rewritten.lower() != original_query.lower():
                 return rewritten
         except Exception as e:
             logger.warning(f"Query rewrite attempt {attempt+1} failed: {e}")

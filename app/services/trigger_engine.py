@@ -107,6 +107,35 @@ class TriggerEngine:
         if search_count >= 2:
             return {"should_run_agent": True, "trigger_reason": "search_signal", "cold_start": False}
 
+        # 4b. Ignored-recommendation trigger: last 2 recs have no clicks but at least 1 dismiss
+        last_two_recs = db.query(Recommendation).filter(
+            Recommendation.user_id == user_id
+        ).order_by(Recommendation.created_at.desc()).limit(2).all()
+
+        if len(last_two_recs) >= 2:
+            rec_ids_str = [str(r.id) for r in last_two_recs]
+            click_events = db.query(Event).filter(
+                Event.event_type == "rec_click",
+                Event.user_id == user_id,
+            ).all()
+            clicks_on_recs = sum(
+                1 for e in click_events
+                if str(e.payload_json.get("recommendation_id", "")) in rec_ids_str
+            )
+
+            dismiss_events = db.query(Event).filter(
+                Event.event_type == "rec_dismiss",
+                Event.user_id == user_id,
+            ).all()
+            dismisses_on_recs = sum(
+                1 for e in dismiss_events
+                if str(e.payload_json.get("recommendation_id", "")) in rec_ids_str
+            )
+
+            if clicks_on_recs == 0 and dismisses_on_recs > 0:
+                logger.info(f"[TriggerEngine] User {user_id} ignored last 2 recs (0 clicks, {dismisses_on_recs} dismisses)")
+                return {"should_run_agent": True, "trigger_reason": "ignored_recommendations", "cold_start": False}
+
         # 5. Staleness (>= 2 hours since last recommendation)
         if not last_rec or last_rec.created_at <= two_hours_ago:
             return {"should_run_agent": True, "trigger_reason": "staleness", "cold_start": False}

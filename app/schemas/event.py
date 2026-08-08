@@ -13,6 +13,11 @@ ALLOWED_EVENT_TYPES = {
     "time_on_page",
     "syllabus_view",
     "enroll_preview",
+    "course_click",
+    "course_view",
+    "course_impression",
+    "rec_click",
+    "rec_dismiss",
 }
 
 MAX_PAYLOAD_BYTES = 5 * 1024  # 5 KB

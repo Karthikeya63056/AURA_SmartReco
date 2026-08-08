@@ -1,4 +1,7 @@
 import os
+# Suppress ChromaDB telemetry error logs
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+
 import logging
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
@@ -100,12 +103,30 @@ async def lifespan(app: FastAPI):
     try:
         from sqlalchemy import text
         with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE recommendations ADD COLUMN product_reasons JSON"))
-            conn.commit()
-            logger.info("Migrated recommendations table: added product_reasons column.")
+            try:
+                conn.execute(text("ALTER TABLE recommendations ADD COLUMN product_reasons JSON"))
+                conn.commit()
+                logger.info("Migrated recommendations table: added product_reasons column.")
+            except Exception:
+                pass
+
+            try:
+                conn.execute(text("ALTER TABLE products ADD COLUMN prerequisites JSON"))
+                conn.commit()
+                logger.info("Migrated products table: added prerequisites column.")
+            except Exception:
+                pass
+
+            try:
+                conn.execute(text("ALTER TABLE products ADD COLUMN skills_taught JSON"))
+                conn.commit()
+                logger.info("Migrated products table: added skills_taught column.")
+            except Exception:
+                pass
     except Exception:
-        # Column already exists or table freshly created
+        # Columns already exist or tables freshly created
         pass
+
 
 
     try:
@@ -418,6 +439,10 @@ def page_admin_dashboard(
         db.query(Event).order_by(Event.created_at.desc()).limit(10).all()
     )
 
+    # Compute recommendation outcome metrics
+    from app.routers.admin import _compute_recommendation_outcomes
+    outcomes = _compute_recommendation_outcomes(db)
+
     return templates.TemplateResponse(
         "admin/dashboard.html",
         {
@@ -427,6 +452,10 @@ def page_admin_dashboard(
             "event_count": event_count,
             "rec_count": rec_count,
             "recent_events": recent_events,
+            "total_clicks": outcomes["total_clicks"],
+            "total_dismisses": outcomes["total_dismisses"],
+            "overall_ctr": outcomes["overall_ctr"],
+            "rec_metrics": outcomes["rec_metrics"],
         },
     )
 
