@@ -56,7 +56,16 @@
         global.triggerRecommendationRefresh({ silent: true });
         return;
       } catch (e) {
-        console.warn('[SmartTracker] recommendation refresh failed', e);
+        console.warn('[SmartTracker] triggerRecommendationRefresh failed', e);
+      }
+    }
+
+    if (typeof global.refreshRecs === 'function') {
+      try {
+        global.refreshRecs({ silent: true });
+        return;
+      } catch (e) {
+        console.warn('[SmartTracker] refreshRecs failed', e);
       }
     }
 

@@ -68,8 +68,11 @@ class RecommendationService:
 
         events_summary_str = "\n".join(events_summary_list) if events_summary_list else "User just arrived on platform."
         recurring_patterns_str = _build_recurring_pattern_summary(recent_events)
-        # Keep this aligned with TriggerEngine, which hashes the newest 20 events.
-        current_behavior_hash = compute_behavior_hash(recent_events[:20])
+        # Match TriggerEngine exactly: hash the newest 20 events, regardless of age.
+        behavior_events = db.query(Event).filter(
+            Event.user_id == user_id
+        ).order_by(Event.created_at.desc()).limit(20).all()
+        current_behavior_hash = compute_behavior_hash(behavior_events)
 
         initial_state = {
             "user_id": user_id,

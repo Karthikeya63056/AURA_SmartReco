@@ -68,10 +68,6 @@ class MaxBodySizeMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-# Event types that count as "course engagement" for dashboard stats
-COURSE_VIEW_EVENT_TYPES = ("course_view",)
-
-
 def recommendation_to_dict(rec: Optional[Recommendation]) -> Optional[Dict[str, Any]]:
     """
     Normalize ORM Recommendation → template-safe dict.
@@ -79,31 +75,36 @@ def recommendation_to_dict(rec: Optional[Recommendation]) -> Optional[Dict[str, 
     """
     if not rec:
         return None
+    meta = getattr(rec, "metadata_json", None) or {}
+    reasons = getattr(rec, "product_reasons", None)
+    if reasons is None and isinstance(meta, dict):
+        reasons = meta.get("product_reasons") or meta.get("reasons") or []
     return {
         "id": rec.id,
         "narrative": rec.narrative or "",
         "product_ids": rec.product_ids_json or [],
-        "product_reasons": getattr(rec, "product_reasons", None) or [],
+        "product_reasons": reasons or [],
         "quality_score": rec.quality_score,
         "trigger_reason": rec.trigger_reason,
         "refetch_count": getattr(rec, "refetch_count", 0) or 0,
-        "metadata_json": getattr(rec, "metadata_json", None) or {},
+        "metadata_json": meta,
         "created_at": rec.created_at,
     }
 
 
 def build_user_stats(db: Session, user_id: int) -> Dict[str, int]:
-    course_events = db.query(Event).filter(
+    viewed_ids = set()
+    rows = db.query(Event.payload_json).filter(
         Event.user_id == user_id,
-        Event.event_type.in_(COURSE_VIEW_EVENT_TYPES),
+        Event.event_type == "course_view",
     ).all()
-    courses_viewed = len({
-        event.payload_json.get("course_id")
-        for event in course_events
-        if event.payload_json and event.payload_json.get("course_id")
-    })
+    for (payload,) in rows:
+        if isinstance(payload, dict):
+            course_id = payload.get("course_id")
+            if course_id is not None:
+                viewed_ids.add(int(course_id))
     return {
-        "courses_viewed": courses_viewed,
+        "courses_viewed": len(viewed_ids),
         "events": db.query(Event).filter(Event.user_id == user_id).count(),
         "recommendations": db.query(Recommendation)
         .filter(Recommendation.user_id == user_id)

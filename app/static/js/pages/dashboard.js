@@ -63,6 +63,7 @@
 
   // Single entry point for manual and tracker-triggered refreshes.
   window.triggerRecommendationRefresh = refreshRecs;
+  window.refreshRecs = refreshRecs;
 
   function init() {
     const narrativeEl = document.getElementById('narrativeContent');

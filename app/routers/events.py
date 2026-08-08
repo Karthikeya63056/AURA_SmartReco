@@ -22,12 +22,13 @@ MAX_EVENTS_PER_WINDOW = 100
 MAX_RATE_LIMIT_KEYS = 10_000  # Hard cap to prevent unbounded memory growth
 
 
-def _check_rate_limit(rate_key: str, event_count: int) -> bool:
+def _check_rate_limit(rate_key: str, event_count: int = 1) -> bool:
     """
     Simple sliding-window rate limiter with a hard cap on dictionary size
     to prevent memory exhaustion from attacker-controlled keys.
     """
     now = time.time()
+    event_count = max(1, int(event_count))
 
     # Evict oldest keys if we are at the hard limit
     if len(_rate_limit_map) >= MAX_RATE_LIMIT_KEYS and rate_key not in _rate_limit_map:
