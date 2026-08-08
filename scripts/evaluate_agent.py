@@ -14,6 +14,7 @@ Outputs a rich evaluation_report.json + console summary.
 from __future__ import annotations
 
 import asyncio
+import argparse
 import json
 import logging
 import sys
@@ -336,7 +337,7 @@ Return ONLY valid JSON:
 # ---------------------------------------------------------------------------
 # Main evaluation loop
 # ---------------------------------------------------------------------------
-def run_evaluation() -> Dict[str, Any]:
+def run_evaluation(quick: bool = False) -> Dict[str, Any]:
     logger.info("Starting AURA SmartReco Synthetic Evaluation Framework (v2)...")
     db = SessionLocal()
     results: List[Dict[str, Any]] = []
@@ -430,7 +431,7 @@ def run_evaluation() -> Dict[str, Any]:
             precision, recall = compute_precision_recall(
                 recommended_titles, persona["ground_truth"]
             )
-            narrative_score = score_narrative_llm_judge(narrative, persona)
+            narrative_score = 0.75 if quick else score_narrative_llm_judge(narrative, persona)
 
             duration = round(time.perf_counter() - t0, 2)
 
@@ -518,4 +519,11 @@ def run_evaluation() -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    run_evaluation()
+    parser = argparse.ArgumentParser(description="Evaluate AURA SmartReco personas.")
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Skip the narrative LLM judge and use a deterministic 0.75 score.",
+    )
+    args = parser.parse_args()
+    run_evaluation(quick=args.quick)

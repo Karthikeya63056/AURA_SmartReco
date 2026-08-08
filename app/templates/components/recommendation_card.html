@@ -50,7 +50,7 @@
   {% endif %}
 
   {% if recommendation and (recommendation.quality_score is defined or recommendation.trigger_reason is defined) %}
-  <div style="margin-top:16px; display:flex; flex-wrap:wrap; gap:8px;">
+  <div class="rec-status-badges" style="margin-top:16px; display:flex; flex-wrap:wrap; gap:8px;">
     {% if recommendation.quality_score is defined and recommendation.quality_score is not none %}
       <span class="badge badge-cyan">score {{ recommendation.quality_score }}</span>
     {% endif %}

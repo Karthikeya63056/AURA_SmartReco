@@ -1,5 +1,6 @@
 import logging
 from typing import List, Optional, Dict, Any
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.models.product import Product
 from app.core.vector_store import get_products_collection
@@ -113,6 +114,7 @@ def reindex_pending_products(db: Session) -> int:
 
     collection = get_products_collection()
     success_count = 0
+    successful_batch: List[Product] = []
     for product in pending:
         try:
             doc_text = _build_product_document_text(product)
@@ -123,11 +125,17 @@ def reindex_pending_products(db: Session) -> int:
                 metadatas=[metadata]
             )
             product.needs_reindex = False
-            db.commit()
-            success_count += 1
+            successful_batch.append(product)
+            if len(successful_batch) >= 10:
+                db.commit()
+                success_count += len(successful_batch)
+                successful_batch = []
         except Exception as e:
             logger.error(f"Reindex failed for product ID {product.id}: {str(e)}")
-            db.rollback()
+
+    if successful_batch:
+        db.commit()
+        success_count += len(successful_batch)
 
     return success_count
 
@@ -170,26 +178,16 @@ def reindex_needs_reindex_products() -> int:
     from app.core.database import SessionLocal
 
     db = SessionLocal()
-    success_count = 0
     try:
-        pending = db.query(Product).filter(Product.needs_reindex == True).all()  # noqa: E712
-        if not pending:
+        pending_count = db.query(Product).filter(Product.needs_reindex == True).count()  # noqa: E712
+        if not pending_count:
             logger.info("Startup reindex: no products with needs_reindex=True")
             return 0
 
-        logger.info(f"Startup reindex: attempting to reindex {len(pending)} product(s)...")
-        for product in pending:
-            try:
-                # update_product with empty patch re-upserts current fields to Chroma
-                updated = update_product(db, product.id, {})
-                if updated and not updated.needs_reindex:
-                    success_count += 1
-            except Exception as product_err:
-                logger.error(
-                    f"Startup reindex failed for product id={product.id}: {product_err}"
-                )
+        logger.info(f"Startup reindex: attempting to reindex {pending_count} product(s)...")
+        success_count = reindex_pending_products(db)
         logger.info(
-            f"Startup reindex complete: {success_count}/{len(pending)} products recovered"
+            f"Startup reindex complete: {success_count}/{pending_count} products recovered"
         )
         return success_count
     finally:
@@ -287,9 +285,27 @@ def _sql_keyword_search(query_text: str, n_results: int = 15) -> List[Dict[str, 
     if not keywords:
         keywords = ["ai", "machine", "learning"]
 
+    # JSON tags are not consistently searchable across supported SQL backends,
+    # so use indexed text fields for the database-side candidate filter.
+    predicates = []
+    for keyword in keywords:
+        pattern = f"%{keyword}%"
+        predicates.extend((
+            Product.title.ilike(pattern),
+            Product.description.ilike(pattern),
+            Product.category.ilike(pattern),
+        ))
+
+    candidate_limit = min(max(n_results, 1) * 3, 50)
     db = SessionLocal()
     try:
-        products = db.query(Product).all()
+        products = (
+            db.query(Product)
+            .filter(or_(*predicates))
+            .order_by(Product.rating.desc(), Product.is_popular.desc(), Product.is_trending.desc())
+            .limit(candidate_limit)
+            .all()
+        )
         scored: List[tuple] = []
 
         for p in products:
@@ -302,7 +318,7 @@ def _sql_keyword_search(query_text: str, n_results: int = 15) -> List[Dict[str, 
         scored.sort(key=lambda x: x[1], reverse=True)
 
         candidates = []
-        for p, score in scored[:n_results]:
+        for p, score in scored[:max(n_results, 0)]:
             doc_text = _build_product_document_text(p)
             metadata = _build_product_chroma_metadata(p)
             candidates.append({

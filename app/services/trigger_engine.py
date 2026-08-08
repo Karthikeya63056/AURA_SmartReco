@@ -1,7 +1,7 @@
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,13 @@ logger = logging.getLogger(__name__)
 
 COOLDOWN_MINUTES = 10
 HIGH_INTENT_TYPES = {"wishlist", "enroll_preview", "syllabus_view"}
+
+
+def _as_utc(value: datetime) -> datetime:
+    """Normalize legacy/SQLite naive timestamps before Python comparisons."""
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def compute_behavior_hash(events: List[Event]) -> str:
@@ -41,7 +48,7 @@ class TriggerEngine:
         if manual_force:
             return {"should_run_agent": True, "trigger_reason": "manual", "cold_start": False}
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         ten_minutes_ago = now - timedelta(minutes=COOLDOWN_MINUTES)
         fifteen_minutes_ago = now - timedelta(minutes=15)
         two_hours_ago = now - timedelta(hours=2)
@@ -52,7 +59,7 @@ class TriggerEngine:
         ).order_by(Recommendation.created_at.desc()).first()
 
         # Cooldown guard: 10 minutes
-        if last_rec and last_rec.created_at > ten_minutes_ago:
+        if last_rec and _as_utc(last_rec.created_at) > ten_minutes_ago:
             return {
                 "should_run_agent": False,
                 "trigger_reason": "cooldown_active",
@@ -88,7 +95,10 @@ class TriggerEngine:
             }
 
         # 2. High-intent action signal in last 15 min
-        recent_15m_events = [e for e in recent_events if e.created_at >= fifteen_minutes_ago]
+        recent_15m_events = [
+            event for event in recent_events
+            if _as_utc(event.created_at) >= fifteen_minutes_ago
+        ]
         has_high_intent = any(e.event_type in HIGH_INTENT_TYPES for e in recent_15m_events)
         if has_high_intent:
             return {"should_run_agent": True, "trigger_reason": "high_intent", "cold_start": False}
@@ -137,7 +147,7 @@ class TriggerEngine:
                 return {"should_run_agent": True, "trigger_reason": "ignored_recommendations", "cold_start": False}
 
         # 5. Staleness (>= 2 hours since last recommendation)
-        if not last_rec or last_rec.created_at <= two_hours_ago:
+        if not last_rec or _as_utc(last_rec.created_at) <= two_hours_ago:
             return {"should_run_agent": True, "trigger_reason": "staleness", "cold_start": False}
 
         return {"should_run_agent": False, "trigger_reason": "skip", "cold_start": False}

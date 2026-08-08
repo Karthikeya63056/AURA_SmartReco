@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.orm import Session
@@ -29,7 +29,7 @@ async def _run_daily_digest_body() -> int:
     processed_count = 0
 
     try:
-        twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
+        twenty_four_hours_ago = datetime.now(timezone.utc) - timedelta(hours=24)
 
         # Find distinct user IDs who had events in last 24h
         active_user_ids = db.query(Event.user_id).filter(

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, JSON, DateTime, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -13,7 +13,7 @@ class Event(Base):
     event_type = Column(String, index=True, nullable=False)  # page_view, search, click, wishlist, time_on_page
     payload_json = Column(JSON, nullable=False, default=dict)
     idempotency_key = Column(String, unique=True, index=True, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
     # Relationships
     user = relationship("User", back_populates="events")

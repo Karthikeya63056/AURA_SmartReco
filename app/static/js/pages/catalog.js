@@ -4,14 +4,26 @@
 (function () {
   'use strict';
 
-  function applyFilter(filter) {
+  function updateFilterUrl(filter) {
+    const url = new URL(window.location.href);
+    if (filter === 'all') {
+      url.searchParams.delete('category');
+    } else {
+      url.searchParams.set('category', filter);
+    }
+    window.history.pushState({}, '', url.pathname + url.search + url.hash);
+  }
+
+  function applyFilter(filter, options) {
+    options = options || {};
     document.querySelectorAll('.course-card').forEach(function (card) {
       const category = card.getAttribute('data-category') || '';
       const show = filter === 'all' || category === filter;
       card.style.display = show ? '' : 'none';
     });
 
-    if (window.SmartTracker) {
+    if (options.updateUrl) updateFilterUrl(filter);
+    if (!options.silent && window.SmartTracker) {
       SmartTracker.track('filter', { category: filter });
     }
   }
@@ -28,7 +40,7 @@
           b.classList.remove('active');
         });
         btn.classList.add('active');
-        applyFilter(category);
+        applyFilter(category, { silent: true });
       }
     } catch (e) {
       console.warn('[catalog] query filter failed', e);
@@ -42,7 +54,7 @@
           b.classList.remove('active');
         });
         btn.classList.add('active');
-        applyFilter(btn.dataset.filter || 'all');
+        applyFilter(btn.dataset.filter || 'all', { updateUrl: true });
       });
     });
 

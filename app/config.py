@@ -1,5 +1,6 @@
 import os
 import sys
+import logging
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -64,5 +65,12 @@ def _validate_jwt_secret(secret: str) -> None:
             sys.exit(1)
 
 
+logger = logging.getLogger(__name__)
+
 settings = Settings()
+if not settings.MESH_API_KEY or settings.MESH_API_KEY.strip() == "rsk_demo_key":
+    logger.warning(
+        "MESH_API_KEY is missing or uses the demo placeholder; Mesh-backed features "
+        "will fall back to SQL search where possible."
+    )
 _validate_jwt_secret(settings.JWT_SECRET)

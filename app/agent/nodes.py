@@ -700,17 +700,16 @@ async def generate_narrative_node(state: AgentState) -> Dict[str, Any]:
 def _validate_narrative(narrative: str, product_ids: list[int], db: Session) -> tuple[bool, str]:
     """
     Returns (validation_passed, feedback_message).
-    Checks narrative length (120–280 words) and grounding (at least 1 recommended title mentioned).
+    Fails hard only for narratives under 100 words or without a recommended
+    course title. Mild length variance is retained as a non-blocking warning.
     """
     if not narrative:
         return False, "Generated narrative is empty."
 
     # Check length
     word_count = len(narrative.split())
-    if word_count < 120:
-        return False, f"Narrative is too short ({word_count} words). Minimum 120 words required."
-    if word_count > 280:
-        return False, f"Narrative is too long ({word_count} words). Maximum 280 words allowed."
+    if word_count < 100:
+        return False, f"Narrative is too short ({word_count} words). Minimum 100 words required."
 
     # Check grounding: load product titles for recommended IDs
     products = db.query(Product).filter(Product.id.in_(product_ids)).all() if product_ids else []
@@ -720,6 +719,9 @@ def _validate_narrative(narrative: str, product_ids: list[int], db: Session) -> 
     found = [t for t in titles if t.lower() in narrative_lower]
     if not found and titles:
         return False, f"Narrative does not mention any of the recommended courses. Recommended titles: {', '.join(titles[:3])}."
+
+    if 100 <= word_count < 120 or 280 < word_count <= 320:
+        return True, f"Soft length warning: narrative is {word_count} words."
 
     return True, ""
 

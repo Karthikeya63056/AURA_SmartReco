@@ -20,6 +20,7 @@
   let pageStartTime = Date.now();
   let flushTimer = null;
   let started = false;
+  const impressedCourseIds = new Set();
 
   function getOrCreateSessionId() {
     try {
@@ -208,7 +209,12 @@
           const card = entry.target;
           const courseId = card.getAttribute('data-course-id');
           if (!courseId) return;
+          if (impressedCourseIds.has(courseId)) {
+            obs.unobserve(card);
+            return;
+          }
 
+          impressedCourseIds.add(courseId);
           track('course_impression', {
             course_id: safeParseInt(courseId),
             title: card.getAttribute('data-course-title') || '',
@@ -233,7 +239,7 @@
       if (!action) return;
 
       const courseId = target.getAttribute('data-course-id');
-      const title = target.getAttribute('data-course-title') || (target.innerText || '').trim();
+      const title = target.getAttribute('data-course-title') || '';
 
       track(action, {
         course_id: safeParseInt(courseId),
@@ -306,4 +312,4 @@
   // Expose globally for inline onclick handlers
   global.trackRecommendationClick = trackRecommendationClick;
   global.trackRecommendationDismiss = trackRecommendationDismiss;
-})(window);
+})(window);

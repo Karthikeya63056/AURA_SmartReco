@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,6 @@ from app.agent.nodes import _build_recurring_pattern_summary
 from app.models.event import Event
 from app.models.product import Product
 from app.models.recommendation import Recommendation
-from app.services.product_service import get_product
 from app.services.trigger_engine import TriggerEngine, compute_behavior_hash
 from app.core.cache import cache
 
@@ -22,6 +21,15 @@ except ImportError:
         return decorator
 
 logger = logging.getLogger(__name__)
+
+
+def _load_products_in_order(db: Session, product_ids: List[int]) -> List[Product]:
+    """Fetch recommendation products in one query while retaining stored order."""
+    if not product_ids:
+        return []
+    products = db.query(Product).filter(Product.id.in_(product_ids)).all()
+    product_map = {product.id: product for product in products}
+    return [product_map[product_id] for product_id in product_ids if product_id in product_map]
 
 
 class RecommendationService:
@@ -50,7 +58,7 @@ class RecommendationService:
         logger.info(f"Triggering LangGraph agent for user {user_id} (Reason: {trigger_reason})")
 
         # Fetch up to 50 events from the last 7 days
-        seven_days_ago = datetime.utcnow() - timedelta(days=7)
+        seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
         recent_events = db.query(Event).filter(
             Event.user_id == user_id,
             Event.created_at >= seven_days_ago
@@ -125,13 +133,17 @@ class RecommendationService:
         if cached_rec:
             # Attach product objects with paired reasons
             pids = cached_rec.get("product_ids", [])
-            reasons = cached_rec.get("product_reasons", [])
-            fetched = [get_product(db, pid) for pid in pids]
+            reasons = cached_rec.setdefault("product_reasons", [])
+            fetched = _load_products_in_order(db, pids)
+            reason_by_product_id = {
+                product_id: reasons[index]
+                for index, product_id in enumerate(pids)
+                if index < len(reasons)
+            }
             products = []
-            for i, p in enumerate(fetched):
-                if p:
-                    p.reason = reasons[i] if i < len(reasons) else ""
-                    products.append(p)
+            for p in fetched:
+                p.reason = reason_by_product_id.get(p.id, "")
+                products.append(p)
             cached_rec["products"] = products
             return cached_rec
 
@@ -144,12 +156,16 @@ class RecommendationService:
         if rec:
             pids = rec.product_ids_json or []
             reasons = rec.product_reasons or []
-            fetched = [get_product(db, pid) for pid in pids]
+            fetched = _load_products_in_order(db, pids)
+            reason_by_product_id = {
+                product_id: reasons[index]
+                for index, product_id in enumerate(pids)
+                if index < len(reasons)
+            }
             products = []
-            for i, p in enumerate(fetched):
-                if p:
-                    p.reason = reasons[i] if i < len(reasons) else ""
-                    products.append(p)
+            for p in fetched:
+                p.reason = reason_by_product_id.get(p.id, "")
+                products.append(p)
             result = {
                 "id": rec.id,
                 "narrative": rec.narrative,
@@ -172,6 +188,7 @@ class RecommendationService:
             "id": 0,
             "narrative": "### Welcome to SmartReco 2026! 🚀\nExplore our most popular and trending courses tailored for tech professionals. As you browse, our AI agent will personalize recommendations specifically for your goals.",
             "product_ids": [p.id for p in popular_products],
+            "product_reasons": [],
             "products": popular_products,
             "quality_score": 100,
             "trigger_reason": "cold_start_fallback",

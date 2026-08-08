@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Text, JSON, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -17,7 +17,7 @@ class Recommendation(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     refetch_count = Column(Integer, default=0, nullable=False)
     metadata_json = Column(JSON, nullable=True, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
     # Relationships
     user = relationship("User", back_populates="recommendations")

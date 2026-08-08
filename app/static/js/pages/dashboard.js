@@ -6,6 +6,80 @@
 
   let refreshInFlight = false;
 
+  function renderNarrative(narrativeEl) {
+    if (window.AURA_UI) {
+      AURA_UI.renderMarkdown(narrativeEl);
+    } else if (typeof marked !== 'undefined') {
+      const html = marked.parse(narrativeEl.textContent || '');
+      narrativeEl.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
+    }
+  }
+
+  function updateRecommendationsInPlace(payload) {
+    if (!payload || typeof payload.narrative !== 'string' || !Array.isArray(payload.product_ids)) {
+      return false;
+    }
+
+    const narrativeEl = document.getElementById('narrativeContent');
+    const recCard = document.querySelector('.rec-side-card');
+    if (!narrativeEl || !recCard) return false;
+
+    narrativeEl.textContent = payload.narrative;
+    renderNarrative(narrativeEl);
+    if (payload.id != null) recCard.dataset.recommendationId = String(payload.id);
+
+    const chips = recCard.querySelector('.rec-chips');
+    if (chips) {
+      const reasons = Array.isArray(payload.product_reasons) ? payload.product_reasons : [];
+      const fragment = document.createDocumentFragment();
+      payload.product_ids.slice(0, 4).forEach(function (productId, index) {
+        const group = document.createElement('div');
+        group.className = 'rec-chip-group';
+
+        const link = document.createElement('a');
+        link.className = 'rec-chip';
+        link.href = '/course/' + encodeURIComponent(productId);
+        link.textContent = 'View course';
+        link.dataset.recommendationId = String(payload.id || 0);
+        link.dataset.productId = String(productId);
+        link.addEventListener('click', function () {
+          if (window.trackRecommendationClick) {
+            window.trackRecommendationClick(payload.id || 0, productId);
+          }
+        });
+        group.appendChild(link);
+
+        if (reasons[index]) {
+          const reason = document.createElement('span');
+          reason.className = 'rec-reason-chip';
+          reason.textContent = reasons[index];
+          group.appendChild(reason);
+        }
+        fragment.appendChild(group);
+      });
+      chips.replaceChildren(fragment);
+    }
+
+    const statusBadges = recCard.querySelector('.rec-status-badges');
+    if (statusBadges) {
+      statusBadges.replaceChildren();
+      if (payload.quality_score != null) {
+        const score = document.createElement('span');
+        score.className = 'badge badge-cyan';
+        score.textContent = 'score ' + payload.quality_score;
+        statusBadges.appendChild(score);
+      }
+      if (payload.trigger_reason) {
+        const trigger = document.createElement('span');
+        trigger.className = 'badge';
+        trigger.textContent = payload.trigger_reason;
+        statusBadges.appendChild(trigger);
+      }
+    }
+
+    return true;
+  }
+
   async function refreshRecs(options) {
     if (refreshInFlight) return;
     refreshInFlight = true;
@@ -27,8 +101,9 @@
         if (!silent && window.AURA_UI) {
           AURA_UI.toast('Recommendations updated', 'success');
         }
-        // Reload so server-rendered narrative + chips stay in sync
-        window.location.reload();
+        if (!updateRecommendationsInPlace(result.data)) {
+          window.location.reload();
+        }
         return;
       }
 
@@ -67,12 +142,7 @@
 
   function init() {
     const narrativeEl = document.getElementById('narrativeContent');
-    if (narrativeEl && window.AURA_UI) {
-        AURA_UI.renderMarkdown(narrativeEl);
-    } else if (narrativeEl && typeof marked !== 'undefined') {
-      const html = marked.parse(narrativeEl.textContent || '');
-      narrativeEl.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
-    }
+    if (narrativeEl) renderNarrative(narrativeEl);
 
     const btn = document.getElementById('refreshBtn');
     if (btn) {

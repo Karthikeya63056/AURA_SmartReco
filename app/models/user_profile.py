@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, JSON, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -13,7 +13,7 @@ class UserProfile(Base):
     skill_level = Column(String, nullable=False, default="Beginner")  # Beginner, Intermediate, Advanced
     intent = Column(String, nullable=False, default="Exploring")  # Learning, Career Transition, Upskilling
     behavior_hash = Column(String, nullable=True)
-    last_calculated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_calculated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
     user = relationship("User", back_populates="profile")

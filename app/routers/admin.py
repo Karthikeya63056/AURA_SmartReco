@@ -109,17 +109,20 @@ async def get_agent_trace(
 
 def _compute_recommendation_outcomes(db: Session) -> Dict[str, Any]:
     """Compute click/dismiss/CTR metrics for recommendations (last 30 days)."""
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from sqlalchemy import func, cast, String
 
-    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
 
     # Get recent recommendations
-    recent_recs = db.query(Recommendation).filter(
+    recent_recs_query = db.query(Recommendation).filter(
         Recommendation.created_at >= thirty_days_ago
-    ).order_by(Recommendation.created_at.desc()).limit(50).all()
+    )
+    total_recs = recent_recs_query.count()
 
-    total_recs = len(recent_recs)
+    # The detail table is intentionally bounded for rendering; its count is
+    # not used as the overall CTR denominator.
+    recent_recs = recent_recs_query.order_by(Recommendation.created_at.desc()).limit(20).all()
 
     # Count all rec_click and rec_dismiss events
     total_clicks = db.query(Event).filter(
@@ -138,16 +141,18 @@ def _compute_recommendation_outcomes(db: Session) -> Dict[str, Any]:
 
     # Per-recommendation breakdown
     rec_metrics = []
-    for rec in recent_recs[:20]:  # Top 20 most recent
+    for rec in recent_recs:
         rec_id_str = str(rec.id)
 
         click_count = db.query(Event).filter(
             Event.event_type == "rec_click",
+            Event.created_at >= thirty_days_ago,
             cast(func.json_extract(Event.payload_json, "$.recommendation_id"), String) == rec_id_str,
         ).count()
 
         dismiss_count = db.query(Event).filter(
             Event.event_type == "rec_dismiss",
+            Event.created_at >= thirty_days_ago,
             cast(func.json_extract(Event.payload_json, "$.recommendation_id"), String) == rec_id_str,
         ).count()
 

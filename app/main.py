@@ -6,7 +6,8 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional
 
-from fastapi import FastAPI, Request, Depends, status, HTTPException
+from fastapi import FastAPI, Request, Depends, status, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -180,6 +181,13 @@ app = FastAPI(
 )
 
 # Register security headers middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(MaxBodySizeMiddleware)
 
@@ -384,7 +392,7 @@ def page_profile(
 @app.get("/search", response_class=HTMLResponse)
 def page_search(
     request: Request,
-    q: str = "",
+    q: str = Query(default="", max_length=200),
     db: Session = Depends(get_db),
     user: Optional[User] = Depends(get_current_user_optional),
 ):
@@ -510,6 +518,8 @@ def page_admin_trace(
     user: User = Depends(get_admin_user),
 ):
     target_user = db.query(User).filter(User.id == user_id).first()
+    if target_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
 
     rec_row = (
         db.query(Recommendation)
