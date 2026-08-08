@@ -9,6 +9,7 @@ from app.core.database import get_db, SessionLocal
 from app.dependencies import get_current_user_optional, get_current_user, get_anonymous_user
 from app.models.user import User
 from app.services.recommendation_service import RecommendationService
+from app.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +28,17 @@ async def get_recommendations(
     """
     user = current_user or get_anonymous_user(db)
     user_id = user.id
-    rec = await run_in_threadpool(RecommendationService.get_active, db, user_id)
+    rec = await run_in_threadpool(_get_active_sync, user_id)
     return rec
+
+
+def _get_active_sync(user_id: int) -> Dict[str, Any]:
+    """Read recommendations with a session owned by the worker thread."""
+    db = SessionLocal()
+    try:
+        return RecommendationService.get_active(db, user_id)
+    finally:
+        db.close()
 
 
 def _run_generate_and_store_sync(user_id: int, trigger_reason: str) -> Dict[str, Any]:
@@ -62,9 +72,17 @@ async def force_refresh_recommendation(
     Offloads the full generate_and_store pipeline (sync DB + async agent) to a
     threadpool worker so the FastAPI event loop stays responsive.
     """
+    cooldown_key = f"manual_refresh:{current_user.id}"
+    if cache.get(cooldown_key):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Please wait before refreshing again.",
+        )
+
     rec_result = await run_in_threadpool(
         _run_generate_and_store_sync,
         current_user.id,
         "manual",
     )
+    cache.set(cooldown_key, True, ttl_seconds=300)
     return rec_result

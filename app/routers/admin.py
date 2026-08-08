@@ -110,7 +110,7 @@ async def get_agent_trace(
 def _compute_recommendation_outcomes(db: Session) -> Dict[str, Any]:
     """Compute click/dismiss/CTR metrics for recommendations (last 30 days)."""
     from datetime import datetime, timedelta
-    from sqlalchemy import func, case, cast, String
+    from sqlalchemy import func, cast, String
 
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
 
@@ -141,21 +141,15 @@ def _compute_recommendation_outcomes(db: Session) -> Dict[str, Any]:
     for rec in recent_recs[:20]:  # Top 20 most recent
         rec_id_str = str(rec.id)
 
-        clicks = db.query(Event).filter(
+        click_count = db.query(Event).filter(
             Event.event_type == "rec_click",
-        ).all()
-        click_count = sum(
-            1 for e in clicks
-            if str(e.payload_json.get("recommendation_id", "")) == rec_id_str
-        )
+            cast(func.json_extract(Event.payload_json, "$.recommendation_id"), String) == rec_id_str,
+        ).count()
 
-        dismisses = db.query(Event).filter(
+        dismiss_count = db.query(Event).filter(
             Event.event_type == "rec_dismiss",
-        ).all()
-        dismiss_count = sum(
-            1 for e in dismisses
-            if str(e.payload_json.get("recommendation_id", "")) == rec_id_str
-        )
+            cast(func.json_extract(Event.payload_json, "$.recommendation_id"), String) == rec_id_str,
+        ).count()
 
         interactions = click_count + dismiss_count
         ctr = round((click_count / interactions * 100) if interactions > 0 else 0, 1)

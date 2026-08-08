@@ -51,12 +51,12 @@
     if (!trigger || !trigger.should_run_agent) return;
 
     // Prefer explicit dashboard handler
-    if (typeof global.refreshRecs === 'function') {
+    if (typeof global.triggerRecommendationRefresh === 'function') {
       try {
-        global.refreshRecs({ silent: true });
+        global.triggerRecommendationRefresh({ silent: true });
         return;
       } catch (e) {
-        console.warn('[SmartTracker] refreshRecs failed', e);
+        console.warn('[SmartTracker] recommendation refresh failed', e);
       }
     }
 

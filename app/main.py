@@ -52,12 +52,24 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class MaxBodySizeMiddleware(BaseHTTPMiddleware):
+    """Reject oversized write requests before their body is read into memory."""
+
+    async def dispatch(self, request: Request, call_next):
+        if request.method in ("POST", "PUT", "PATCH"):
+            content_length = request.headers.get("content-length")
+            if content_length:
+                try:
+                    is_too_large = int(content_length) > 1_000_000
+                except ValueError:
+                    is_too_large = True
+                if is_too_large:
+                    return HTMLResponse("Payload too large", status_code=413)
+        return await call_next(request)
+
+
 # Event types that count as "course engagement" for dashboard stats
-COURSE_VIEW_EVENT_TYPES = (
-    "course_view",
-    "course_click",
-    "course_impression",
-)
+COURSE_VIEW_EVENT_TYPES = ("course_view",)
 
 
 def recommendation_to_dict(rec: Optional[Recommendation]) -> Optional[Dict[str, Any]]:
@@ -81,13 +93,17 @@ def recommendation_to_dict(rec: Optional[Recommendation]) -> Optional[Dict[str, 
 
 
 def build_user_stats(db: Session, user_id: int) -> Dict[str, int]:
+    course_events = db.query(Event).filter(
+        Event.user_id == user_id,
+        Event.event_type.in_(COURSE_VIEW_EVENT_TYPES),
+    ).all()
+    courses_viewed = len({
+        event.payload_json.get("course_id")
+        for event in course_events
+        if event.payload_json and event.payload_json.get("course_id")
+    })
     return {
-        "courses_viewed": db.query(Event)
-        .filter(
-            Event.user_id == user_id,
-            Event.event_type.in_(COURSE_VIEW_EVENT_TYPES),
-        )
-        .count(),
+        "courses_viewed": courses_viewed,
         "events": db.query(Event).filter(Event.user_id == user_id).count(),
         "recommendations": db.query(Recommendation)
         .filter(Recommendation.user_id == user_id)
@@ -121,6 +137,13 @@ async def lifespan(app: FastAPI):
                 conn.execute(text("ALTER TABLE products ADD COLUMN skills_taught JSON"))
                 conn.commit()
                 logger.info("Migrated products table: added skills_taught column.")
+            except Exception:
+                pass
+
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1 NOT NULL"))
+                conn.commit()
+                logger.info("Migrated users table: added is_active column.")
             except Exception:
                 pass
     except Exception:
@@ -157,6 +180,7 @@ app = FastAPI(
 
 # Register security headers middleware
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(MaxBodySizeMiddleware)
 
 os.makedirs("app/static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

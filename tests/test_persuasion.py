@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from app.agent.nodes import _infer_persuasion_style, generate_narrative_node
 from app.agent.prompts import (
     PERSUASIVE_PROMPT_ANALYTICAL,
@@ -65,7 +65,7 @@ def test_generate_narrative_selects_correct_prompt_variant():
 
     with patch("app.agent.nodes.SessionLocal") as mock_session_cls, \
          patch("app.agent.nodes.get_product", return_value=mock_product), \
-         patch("app.agent.nodes.generate_chat_completion", return_value="Generated analytical narrative content between 120 and 280 words long.") as mock_llm:
+         patch("app.agent.nodes.generate_chat_completion", new=AsyncMock(return_value="Generated analytical narrative content between 120 and 280 words long.")) as mock_llm:
         mock_db = MagicMock()
         mock_session_cls.return_value = mock_db
 

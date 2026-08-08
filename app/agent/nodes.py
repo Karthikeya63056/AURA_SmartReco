@@ -3,6 +3,7 @@ import re
 import logging
 from typing import Dict, Any
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.config import settings
 from app.agent.state import AgentState
@@ -17,9 +18,8 @@ from app.agent.prompts import (
     PERSUASIVE_PROMPT_HYBRID,
     QUERY_REWRITE_PROMPT,
     NARRATIVE_FIX_INSTRUCTION,
-    REASON_GENERATION_PROMPT,
 )
-from app.core.llm import generate_chat_completion, get_llm_client
+from app.core.llm import generate_chat_completion
 from app.services.product_service import search_products_vector, get_product
 from app.models.recommendation import Recommendation
 from app.models.user_profile import UserProfile
@@ -355,7 +355,7 @@ async def analyze_behavior_node(state: AgentState) -> Dict[str, Any]:
     )
 
     try:
-        response_text = generate_chat_completion(
+        response_text = await generate_chat_completion(
             model=settings.DEFAULT_CHAT_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3
@@ -430,16 +430,21 @@ async def retrieve_candidates_node(state: AgentState) -> Dict[str, Any]:
 
     logger.info(f"[Node 2] Vector search for '{search_query}' (n_results={n_results}, refetch_count={refetch_count}, where_filter={where_filter})")
 
-    candidates = search_products_vector(
+    candidates = await run_in_threadpool(
+        search_products_vector,
         query_text=search_query,
         n_results=n_results,
-        where_filter=where_filter
+        where_filter=where_filter,
     )
 
     # If filtered search returned 0 candidates, fallback to unfiltered search
     if not candidates and where_filter:
         logger.info("[Node 2] Filtered search returned 0 candidates, falling back to unfiltered search")
-        candidates = search_products_vector(query_text=search_query, n_results=n_results)
+        candidates = await run_in_threadpool(
+            search_products_vector,
+            query_text=search_query,
+            n_results=n_results,
+        )
 
     # Soft filter: adjust candidate similarity/distance ranking based on unmet prerequisites
     user_skills = state.get("user_skills", [])
@@ -544,52 +549,6 @@ def _extract_json_from_llm(text: str) -> list | None:
     return None
 
 
-def _generate_reasons_llm(
-    product_ids: list[int],
-    user_profile: dict,
-    search_query: str,
-) -> list[str] | None:
-    """
-    Use a lightweight LLM call to generate per-course reasons.
-    Returns None on failure so the caller can fall back to templates.
-    """
-    db: Session = SessionLocal()
-    courses_lines: list[str] = []
-    try:
-        for pid in product_ids:
-            p = get_product(db, pid)
-            if p:
-                courses_lines.append(f"- {p.title} ({p.category}, {p.level})")
-            else:
-                courses_lines.append(f"- Course ID {pid}")
-    finally:
-        db.close()
-
-    prompt = REASON_GENERATION_PROMPT.format(
-        interests=sanitize_prompt_input(", ".join(user_profile.get("interests", [])), 300),
-        skill_level=sanitize_prompt_input(user_profile.get("skill_level", "Intermediate"), 50),
-        intent=sanitize_prompt_input(user_profile.get("intent", "Upskilling"), 80),
-        search_query=sanitize_prompt_input(search_query, 200),
-        courses_list=sanitize_prompt_input("\n".join(courses_lines), 1500),
-    )
-
-    try:
-        response_text = generate_chat_completion(
-            model=settings.DEFAULT_CHAT_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=150,
-        )
-        reasons = _extract_json_from_llm(response_text)
-        if isinstance(reasons, list) and len(reasons) == len(product_ids):
-            return [str(r).strip().strip('"').strip("'")[:80] for r in reasons]
-        logger.warning(f"[Reasons] LLM returned mismatched count: expected {len(product_ids)}, got {len(reasons) if isinstance(reasons, list) else 'non-list'}")
-        return None
-    except Exception as e:
-        logger.warning(f"[Reasons] LLM reason generation failed: {e}")
-        return None
-
-
 async def evaluate_and_rerank_node(state: AgentState) -> Dict[str, Any]:
     """Node 3: Score candidate relevance & rerank via Mesh API."""
     user_profile = state.get("user_profile", {})
@@ -619,7 +578,7 @@ async def evaluate_and_rerank_node(state: AgentState) -> Dict[str, Any]:
     )
 
     try:
-        response_text = generate_chat_completion(
+        response_text = await generate_chat_completion(
             model=settings.DEFAULT_CHAT_MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2
@@ -634,14 +593,10 @@ async def evaluate_and_rerank_node(state: AgentState) -> Dict[str, Any]:
         metadata = state.get("metadata", {})
         metadata.update({"needs_refetch": needs_refetch, "eval_reasoning": reasoning})
 
-        # Generate per-course "why" reasons (LLM with template fallback)
+        # Template reasons avoid an additional LLM call for every recommendation.
         selected_ids = top_ids[:5]
-        reasons = _generate_reasons_llm(selected_ids, user_profile, search_query)
-        if reasons is None:
-            reasons = _generate_template_reasons(selected_ids, user_profile, search_query)
-            logger.info(f"[Node 3] Using template fallback reasons for {len(selected_ids)} courses")
-        else:
-            logger.info(f"[Node 3] Generated LLM reasons for {len(selected_ids)} courses")
+        reasons = _generate_template_reasons(selected_ids, user_profile, search_query)
+        logger.info(f"[Node 3] Generated template reasons for {len(selected_ids)} courses")
 
         return {
             "quality_score": quality_score,
@@ -725,7 +680,7 @@ async def generate_narrative_node(state: AgentState) -> Dict[str, Any]:
         full_prompt = base_prompt
 
     try:
-        narrative = generate_chat_completion(
+        narrative = await generate_chat_completion(
             model=settings.MAIN_CHAT_MODEL,
             messages=[{"role": "user", "content": full_prompt}],
             temperature=0.7
@@ -844,10 +799,12 @@ async def store_node(state: AgentState) -> Dict[str, Any]:
         profile.interests_json = user_profile.get("interests", [])
         profile.skill_level = user_profile.get("skill_level", "Intermediate")
         profile.intent = user_profile.get("intent", "Upskilling")
+        profile.behavior_hash = state.get("current_behavior_hash")
 
         db.commit()
 
-        # Invalidate/update cache (1 hour TTL)
+        # Invalidate before publishing the replacement to prevent stale reads.
+        cache.delete(f"active_rec:{user_id}")
         cache.set(f"active_rec:{user_id}", {
             "id": rec.id,
             "narrative": narrative,
@@ -867,7 +824,7 @@ async def store_node(state: AgentState) -> Dict[str, Any]:
 
 
 
-def _rewrite_query(
+async def _rewrite_query(
     original_query: str,
     interests: list[str],
     skill_level: str,
@@ -891,10 +848,9 @@ def _rewrite_query(
         intent=safe_intent,
     )
 
-    client = get_llm_client()
     for attempt in range(max_attempts):
         try:
-            response = client.chat.completions.create(
+            rewritten = await generate_chat_completion(
                 model=settings.DEFAULT_CHAT_MODEL,
                 messages=[
                     {"role": "system", "content": "You are a helpful search query rewriter. Return only the rewritten search query."},
@@ -903,7 +859,7 @@ def _rewrite_query(
                 temperature=0.5,
                 max_tokens=40,
             )
-            rewritten = response.choices[0].message.content.strip()
+            rewritten = rewritten.strip()
             # Remove prefix labels, Markdown backticks, quotes
             rewritten = re.sub(r'^(rewritten\s*query\s*:?|query\s*:?|search\s*query\s*:?)', '', rewritten, flags=re.IGNORECASE).strip()
             rewritten = rewritten.strip('`').strip('"').strip("'").strip()
@@ -927,7 +883,7 @@ async def refetch_broaden_node(state: AgentState) -> Dict[str, Any]:
     intent = user_profile.get("intent", "learning")
 
     # Attempt to rewrite the query
-    rewritten_query = _rewrite_query(
+    rewritten_query = await _rewrite_query(
         original_query=original_query,
         interests=interests,
         skill_level=skill_level,

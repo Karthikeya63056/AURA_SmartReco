@@ -4,7 +4,11 @@
 (function () {
   'use strict';
 
+  let refreshInFlight = false;
+
   async function refreshRecs(options) {
+    if (refreshInFlight) return;
+    refreshInFlight = true;
     options = options || {};
     const silent = !!options.silent;
     const btn = document.getElementById('refreshBtn');
@@ -47,6 +51,7 @@
         AURA_UI.toast('Something went wrong while refreshing', 'error');
       }
     } finally {
+      refreshInFlight = false;
       if (window.AURA_UI) {
         AURA_UI.setButtonLoading(btn, false);
       } else if (btn) {
@@ -56,8 +61,8 @@
     }
   }
 
-  // Expose for SmartTracker auto-refresh
-  window.refreshRecs = refreshRecs;
+  // Single entry point for manual and tracker-triggered refreshes.
+  window.triggerRecommendationRefresh = refreshRecs;
 
   function init() {
     const narrativeEl = document.getElementById('narrativeContent');

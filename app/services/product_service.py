@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from app.models.product import Product
 from app.core.vector_store import get_products_collection
+from app.core.embeddings import MeshEmbeddingUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -259,6 +260,8 @@ def search_products_vector(
             return candidates
         # If no results from vector search, fall through to SQL fallback
         logger.info("Vector search returned 0 results, falling back to SQL keyword search.")
+    except MeshEmbeddingUnavailable:
+        logger.debug("Vector search skipped because Mesh embeddings are unavailable.")
     except Exception as e:
         logger.warning(f"Vector search failed ({str(e)}), falling back to SQL keyword search.")
 
@@ -313,4 +316,3 @@ def _sql_keyword_search(query_text: str, n_results: int = 15) -> List[Dict[str, 
         return candidates
     finally:
         db.close()
-

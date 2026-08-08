@@ -1,23 +1,23 @@
 import logging
 from typing import Any, Dict, List, Optional
-from openai import OpenAI
+from openai import AsyncOpenAI
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 # Initialize single Mesh API client instance using standard OpenAI SDK
-_client = OpenAI(
+_client = AsyncOpenAI(
     base_url=settings.MESH_BASE_URL,
     api_key=settings.MESH_API_KEY
 )
 
 
-def get_llm_client() -> OpenAI:
+def get_llm_client() -> AsyncOpenAI:
     """Return configured OpenAI client pointed to Mesh API base_url."""
     return _client
 
 
-def generate_chat_completion(
+async def generate_chat_completion(
     model: Optional[str] = None,
     messages: List[Dict[str, str]] = None,
     temperature: float = 0.7,
@@ -51,7 +51,7 @@ def generate_chat_completion(
         if response_format:
             kwargs["response_format"] = response_format
 
-        response = _client.chat.completions.create(**kwargs)
+        response = await _client.chat.completions.create(**kwargs)
         return response.choices[0].message.content or ""
     except Exception as e:
         logger.error(f"Error in Mesh API chat completion call ({selected_model}): {str(e)}")

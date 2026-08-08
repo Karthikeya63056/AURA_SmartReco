@@ -22,7 +22,7 @@ MAX_EVENTS_PER_WINDOW = 100
 MAX_RATE_LIMIT_KEYS = 10_000  # Hard cap to prevent unbounded memory growth
 
 
-def _check_rate_limit(rate_key: str) -> bool:
+def _check_rate_limit(rate_key: str, event_count: int) -> bool:
     """
     Simple sliding-window rate limiter with a hard cap on dictionary size
     to prevent memory exhaustion from attacker-controlled keys.
@@ -42,11 +42,11 @@ def _check_rate_limit(rate_key: str) -> bool:
     # Keep only timestamps within the window
     timestamps = [ts for ts in timestamps if now - ts <= RATE_LIMIT_WINDOW_SECONDS]
 
-    if len(timestamps) >= MAX_EVENTS_PER_WINDOW:
+    if len(timestamps) + event_count > MAX_EVENTS_PER_WINDOW:
         _rate_limit_map[rate_key] = timestamps
         return False
 
-    timestamps.append(now)
+    timestamps.extend([now] * event_count)
     _rate_limit_map[rate_key] = timestamps
     return True
 
@@ -80,7 +80,7 @@ def ingest_event_batch(
         client_ip = request.client.host if request.client else "unknown"
         rate_key = f"ip_{client_ip}"
 
-    if not _check_rate_limit(rate_key):
+    if not _check_rate_limit(rate_key, len(payload.events)):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Event rate limit exceeded. Max 100 events per minute."

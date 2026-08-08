@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from app.agent.graph import should_refetch, should_retry_or_store
 
@@ -42,15 +42,11 @@ async def test_rewrite_query_success():
     """Test _rewrite_query returns rewritten query bounded to max 10 words."""
     from app.agent.nodes import _rewrite_query
 
-    mock_client = MagicMock()
-    mock_response = MagicMock()
-    mock_response.choices = [
-        MagicMock(message=MagicMock(content='"advanced machine learning neural networks deep learning python tutorial"'))
-    ]
-    mock_client.chat.completions.create.return_value = mock_response
-
-    with patch("app.agent.nodes.get_llm_client", return_value=mock_client):
-        result = _rewrite_query(
+    with patch(
+        "app.agent.nodes.generate_chat_completion",
+        new=AsyncMock(return_value='"advanced machine learning neural networks deep learning python tutorial"'),
+    ):
+        result = await _rewrite_query(
             original_query="ai courses",
             interests=["AI", "ML"],
             skill_level="Intermediate",
@@ -67,11 +63,11 @@ async def test_rewrite_query_failure_fallback():
     """Test _rewrite_query returns None when LLM call fails."""
     from app.agent.nodes import _rewrite_query
 
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = Exception("API connection error")
-
-    with patch("app.agent.nodes.get_llm_client", return_value=mock_client):
-        result = _rewrite_query(
+    with patch(
+        "app.agent.nodes.generate_chat_completion",
+        new=AsyncMock(side_effect=Exception("API connection error")),
+    ):
+        result = await _rewrite_query(
             original_query="ai courses",
             interests=["AI"],
             skill_level="Beginner",
@@ -86,7 +82,10 @@ async def test_refetch_broaden_node_with_rewrite():
     """Test refetch_broaden_node updates search query, increments count, and sets drop_filters."""
     from app.agent.nodes import refetch_broaden_node
 
-    with patch("app.agent.nodes._rewrite_query", return_value="expanded artificial intelligence machine learning course"):
+    with patch(
+        "app.agent.nodes._rewrite_query",
+        new=AsyncMock(return_value="expanded artificial intelligence machine learning course"),
+    ):
         state = {
             "user_id": 1,
             "search_query": "ai courses",
@@ -106,7 +105,7 @@ async def test_refetch_broaden_node_fallback_when_rewrite_fails():
     """Test refetch_broaden_node falls back to original query if rewrite returns None."""
     from app.agent.nodes import refetch_broaden_node
 
-    with patch("app.agent.nodes._rewrite_query", return_value=None):
+    with patch("app.agent.nodes._rewrite_query", new=AsyncMock(return_value=None)):
         state = {
             "user_id": 1,
             "search_query": "original query",
@@ -241,9 +240,6 @@ def test_build_recurring_pattern_summary_with_patterns():
     assert "Saved courses to wishlist 2 times." in summary
     assert "Visited platform pages" not in summary  # only 1 page_view event
 
-
-# ─── Per‑Course "Why" Reason Tests ────────────────────────────────────
-
 def test_generate_template_reasons():
     """Test _generate_template_reasons produces deterministic fallback reasons."""
     from app.agent.nodes import _generate_template_reasons
@@ -266,55 +262,3 @@ def test_generate_template_reasons():
     assert "deep learning" in reasons[0]          # template 0: matched search
     assert "Machine Learning" in reasons[1]       # template 1: category
     assert "Intermediate" in reasons[2]           # template 2: skill level
-
-
-def test_generate_reasons_llm_success():
-    """Test _generate_reasons_llm parses valid JSON array from LLM response."""
-    from app.agent.nodes import _generate_reasons_llm
-
-    mock_product = MagicMock()
-    mock_product.title = "Intro to AI"
-    mock_product.category = "AI"
-    mock_product.level = "Beginner"
-
-    llm_response = '["Matches your AI interest", "Great for beginners"]'
-
-    with patch("app.agent.nodes.SessionLocal") as mock_session_cls, \
-         patch("app.agent.nodes.get_product", return_value=mock_product), \
-         patch("app.agent.nodes.generate_chat_completion", return_value=llm_response):
-        mock_db = MagicMock()
-        mock_session_cls.return_value = mock_db
-
-        reasons = _generate_reasons_llm(
-            product_ids=[1, 2],
-            user_profile={"skill_level": "Beginner", "interests": ["AI"], "intent": "Upskilling"},
-            search_query="artificial intelligence"
-        )
-
-    assert reasons is not None
-    assert len(reasons) == 2
-    assert "Matches your AI interest" in reasons[0]
-
-
-def test_generate_reasons_llm_failure_returns_none():
-    """Test _generate_reasons_llm returns None on LLM failure so caller can fall back."""
-    from app.agent.nodes import _generate_reasons_llm
-
-    mock_product = MagicMock()
-    mock_product.title = "Intro to AI"
-    mock_product.category = "AI"
-    mock_product.level = "Beginner"
-
-    with patch("app.agent.nodes.SessionLocal") as mock_session_cls, \
-         patch("app.agent.nodes.get_product", return_value=mock_product), \
-         patch("app.agent.nodes.generate_chat_completion", side_effect=Exception("API error")):
-        mock_db = MagicMock()
-        mock_session_cls.return_value = mock_db
-
-        reasons = _generate_reasons_llm(
-            product_ids=[1],
-            user_profile={"skill_level": "Beginner", "interests": ["AI"], "intent": "Upskilling"},
-            search_query="AI"
-        )
-
-    assert reasons is None

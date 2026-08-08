@@ -1,77 +1,80 @@
 {
-  "timestamp": "2026-08-08T07:53:09.894916+00:00",
+  "timestamp": "2026-08-08T10:55:34.126737+00:00",
   "total_personas": 8,
   "triggered_count": 8,
   "metrics": {
-    "precision_at_5": 0.9583,
-    "recall_at_5": 0.9167,
-    "narrative_relevance_score": 0.78,
-    "avg_duration_sec": 171.63,
-    "overall_score": 0.8902
+    "precision_at_5": 0.75,
+    "recall_at_5": 0.75,
+    "narrative_relevance_score": 0.715,
+    "avg_duration_sec": 18.3,
+    "overall_score": 0.7395
   },
   "persona_results": [
     {
       "persona": "Agent Architecture Builder",
       "triggered": true,
       "trigger_reason": "high_intent",
-      "quality_score": 88,
-      "precision": 1.0,
-      "recall": 1.0,
+      "quality_score": 92,
+      "precision": 0.6667,
+      "recall": 0.6667,
       "narrative_score": 0.8,
       "recommended_ids": [
         1,
         10,
-        7
+        2
       ],
       "recommended_titles": [
         "Master Class: Agentic AI Systems with LangGraph & LangChain",
         "Building Autonomous Multi-Agent Workflows",
-        "Advanced Prompt Engineering & Agent Design Patterns"
+        "Production RAG Architecture & Vector DB Optimization"
       ],
       "product_reasons": [
-        "Matched your search for 'autonomous AI agents LangGraph multi-age'",
+        "Matched your search for 'LangGraph multi-agent autonomous AI arch'",
         "Aligns with your interest in AI & Agents",
-        "Appropriate for your Advanced level"
+        "Appropriate for your Intermediate level"
       ],
       "ground_truth": [
         "Master Class: Agentic AI Systems with LangGraph & LangChain",
         "Building Autonomous Multi-Agent Workflows",
         "Advanced Prompt Engineering & Agent Design Patterns"
       ],
-      "duration_sec": 161.03
+      "duration_sec": 21.78
     },
     {
       "persona": "RAG & Vector Search Engineer",
       "triggered": true,
       "trigger_reason": "high_intent",
-      "quality_score": 90,
-      "precision": 1.0,
+      "quality_score": 92,
+      "precision": 0.6667,
       "recall": 0.6667,
-      "narrative_score": 0.67,
+      "narrative_score": 0.83,
       "recommended_ids": [
         2,
-        12
+        12,
+        19
       ],
       "recommended_titles": [
         "Production RAG Architecture & Vector DB Optimization",
-        "ChromaDB & Vector Store Deep Dive for AI Engineers"
+        "ChromaDB & Vector Store Deep Dive for AI Engineers",
+        "Computer Vision with PyTorch & OpenCV"
       ],
       "product_reasons": [
-        "Matched your search for 'dense embeddings cross-encoder reranking'",
-        "Aligns with your interest in Database & AI"
+        "Matched your search for 'vector database RAG semantic search impl'",
+        "Aligns with your interest in Database & AI",
+        "Appropriate for your Intermediate level"
       ],
       "ground_truth": [
         "Production RAG Architecture & Vector DB Optimization",
         "ChromaDB & Vector Store Deep Dive for AI Engineers",
         "Building Production Recommendation Systems with AI"
       ],
-      "duration_sec": 192.2
+      "duration_sec": 15.29
     },
     {
       "persona": "Data Science & ML Beginner",
       "triggered": true,
       "trigger_reason": "high_intent",
-      "quality_score": 80,
+      "quality_score": 88,
       "precision": 1.0,
       "recall": 1.0,
       "narrative_score": 0.83,
@@ -95,16 +98,16 @@
         "Deep Learning & Neural Networks Fundamentals",
         "Generative AI Application Development with Python"
       ],
-      "duration_sec": 122.27
+      "duration_sec": 17.69
     },
     {
       "persona": "MLOps & Cloud Infrastructure Engineer",
       "triggered": true,
       "trigger_reason": "high_intent",
-      "quality_score": 75,
+      "quality_score": 92,
       "precision": 1.0,
       "recall": 1.0,
-      "narrative_score": 0.77,
+      "narrative_score": 0.83,
       "recommended_ids": [
         4,
         18,
@@ -116,7 +119,7 @@
         "Kubernetes & Helm Masterclass for DevOps"
       ],
       "product_reasons": [
-        "Matched your search for 'MLOps model drift MLflow Kubernetes CI C'",
+        "Matched your search for 'MLOps Kubernetes Docker CI/CD pipelines'",
         "Aligns with your interest in MLOps & Cloud",
         "Appropriate for your Intermediate level"
       ],
@@ -125,7 +128,7 @@
         "Docker & Kubernetes for Machine Learning Engineers",
         "Kubernetes & Helm Masterclass for DevOps"
       ],
-      "duration_sec": 170.71
+      "duration_sec": 21.91
     },
     {
       "persona": "Full-Stack AI Web Developer",
@@ -134,20 +137,20 @@
       "quality_score": 92,
       "precision": 1.0,
       "recall": 1.0,
-      "narrative_score": 0.87,
+      "narrative_score": 0.8,
       "recommended_ids": [
-        5,
         11,
+        5,
         17
       ],
       "recommended_titles": [
-        "Full-Stack LLM Applications with FastAPI & React",
         "FastAPI Microservices Masterclass",
+        "Full-Stack LLM Applications with FastAPI & React",
         "Async Python Programming & High-Performance AsyncIO"
       ],
       "product_reasons": [
-        "Matched your search for 'FastAPI React fullstack LLM async develo'",
-        "Aligns with your interest in Backend Dev",
+        "Matched your search for 'FastAPI microservices async SQLAlchemy'",
+        "Aligns with your interest in Web Dev & AI",
         "Appropriate for your Intermediate level"
       ],
       "ground_truth": [
@@ -155,29 +158,29 @@
         "FastAPI Microservices Masterclass",
         "Async Python Programming & High-Performance AsyncIO"
       ],
-      "duration_sec": 135.82
+      "duration_sec": 18.43
     },
     {
       "persona": "LLM Fine-Tuning & NLP Specialist",
       "triggered": true,
       "trigger_reason": "high_intent",
-      "quality_score": 90,
-      "precision": 1.0,
-      "recall": 1.0,
+      "quality_score": 92,
+      "precision": 0.6667,
+      "recall": 0.6667,
       "narrative_score": 0.8,
       "recommended_ids": [
-        9,
         20,
-        13
+        9,
+        18
       ],
       "recommended_titles": [
-        "Fine-Tuning Open Source LLMs: LLaMA & Mistral",
         "Natural Language Processing from Scratch with Transformers",
-        "Reinforcement Learning from Human Feedback (RLHF)"
+        "Fine-Tuning Open Source LLMs: LLaMA & Mistral",
+        "Docker & Kubernetes for Machine Learning Engineers"
       ],
       "product_reasons": [
-        "Matched your search for 'NLP transformers PyTorch LLM fine-tuning'",
-        "Aligns with your interest in AI & NLP",
+        "Matched your search for 'transformers self-attention pytorch nlp '",
+        "Aligns with your interest in AI & Agents",
         "Appropriate for your Intermediate level"
       ],
       "ground_truth": [
@@ -185,59 +188,59 @@
         "Natural Language Processing from Scratch with Transformers",
         "Reinforcement Learning from Human Feedback (RLHF)"
       ],
-      "duration_sec": 156.09
+      "duration_sec": 24.85
     },
     {
       "persona": "AI Security & Safety Specialist",
       "triggered": true,
       "trigger_reason": "high_intent",
-      "quality_score": 45,
-      "precision": 1.0,
-      "recall": 1.0,
-      "narrative_score": 0.77,
+      "quality_score": 92,
+      "precision": 0.6667,
+      "recall": 0.6667,
+      "narrative_score": 0.83,
       "recommended_ids": [
         16,
         7,
-        3
+        11
       ],
       "recommended_titles": [
         "AI Security, Safety & Red Teaming for Enterprise",
         "Advanced Prompt Engineering & Agent Design Patterns",
-        "Generative AI Application Development with Python"
+        "FastAPI Microservices Masterclass"
       ],
       "product_reasons": [
-        "Matched your search for 'enterprise AI safety red teaming prompt '",
+        "Matched your search for 'AI safety prompt injection vulnerability'",
         "Aligns with your interest in AI & Agents",
-        "Appropriate for your Advanced level"
+        "Appropriate for your Intermediate level"
       ],
       "ground_truth": [
         "AI Security, Safety & Red Teaming for Enterprise",
         "Advanced Prompt Engineering & Agent Design Patterns",
         "Generative AI Application Development with Python"
       ],
-      "duration_sec": 204.49
+      "duration_sec": 19.07
     },
     {
       "persona": "Data Engineer & ETL Architect",
       "triggered": true,
       "trigger_reason": "high_intent",
-      "quality_score": 42,
-      "precision": 0.6667,
-      "recall": 0.6667,
-      "narrative_score": 0.73,
+      "quality_score": 70,
+      "precision": 0.3333,
+      "recall": 0.3333,
+      "narrative_score": 0.0,
       "recommended_ids": [
-        15,
-        10,
+        4,
+        6,
         8
       ],
       "recommended_titles": [
-        "Data Engineering Pipelines with Apache Airflow & Spark",
-        "Building Autonomous Multi-Agent Workflows",
+        "MLOps Bootcamp: CI/CD, Model Monitoring & Kubernetes",
+        "Deep Learning & Neural Networks Fundamentals",
         "Python for Data Science & Machine Learning Masterclass"
       ],
       "product_reasons": [
-        "Matched your search for 'data engineering ETL pipeline orchestrat'",
-        "Aligns with your interest in AI & Agents",
+        "Matched your search for 'AI machine learning courses'",
+        "Aligns with your interest in AI & Machine Learning",
         "Appropriate for your Intermediate level"
       ],
       "ground_truth": [
@@ -245,7 +248,7 @@
         "Python for Data Science & Machine Learning Masterclass",
         "Async Python Programming & High-Performance AsyncIO"
       ],
-      "duration_sec": 230.46
+      "duration_sec": 7.39
     }
   ]
 }

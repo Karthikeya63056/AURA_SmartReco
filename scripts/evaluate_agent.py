@@ -314,10 +314,12 @@ Return ONLY valid JSON:
 }}
 """
     try:
-        response_text = generate_chat_completion(
-            model=settings.DEFAULT_CHAT_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
+        response_text = asyncio.run(
+            generate_chat_completion(
+                model=settings.DEFAULT_CHAT_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+            )
         )
         start = response_text.find("{")
         end = response_text.rfind("}")

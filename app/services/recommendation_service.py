@@ -10,7 +10,7 @@ from app.models.event import Event
 from app.models.product import Product
 from app.models.recommendation import Recommendation
 from app.services.product_service import get_product
-from app.services.trigger_engine import TriggerEngine
+from app.services.trigger_engine import TriggerEngine, compute_behavior_hash
 from app.core.cache import cache
 
 try:
@@ -68,10 +68,13 @@ class RecommendationService:
 
         events_summary_str = "\n".join(events_summary_list) if events_summary_list else "User just arrived on platform."
         recurring_patterns_str = _build_recurring_pattern_summary(recent_events)
+        # Keep this aligned with TriggerEngine, which hashes the newest 20 events.
+        current_behavior_hash = compute_behavior_hash(recent_events[:20])
 
         initial_state = {
             "user_id": user_id,
             "trigger_reason": trigger_reason,
+            "current_behavior_hash": current_behavior_hash,
             "events_summary": events_summary_str,
             "recurring_patterns": recurring_patterns_str,
             "user_profile": {},
