@@ -7,7 +7,10 @@ from app.agent.nodes import (
     retrieve_candidates_node,
     evaluate_and_rerank_node,
     generate_narrative_node,
-    store_node
+    critique_narrative_node,
+    store_node,
+    refetch_broaden_node,
+    refetch_node
 )
 
 try:
@@ -20,19 +23,6 @@ except ImportError:
         return decorator
 
 logger = logging.getLogger(__name__)
-
-
-async def refetch_node(state: AgentState) -> Dict[str, Any]:
-    """Intermediate node that increments refetch count and sets drop_filters flag."""
-    current_count = state.get("refetch_count", 0) + 1
-    query = state.get("search_query", "AI course")
-    logger.info(f"[Refetch Loop] Refetch #{current_count} triggered. Dropping metadata filters to broaden retrieval.")
-
-    return {
-        "refetch_count": current_count,
-        "search_query": query,
-        "drop_filters": True
-    }
 
 
 def should_refetch(state: AgentState) -> str:
@@ -49,6 +39,23 @@ def should_refetch(state: AgentState) -> str:
     return "proceed"
 
 
+def should_retry_or_store(state: AgentState) -> str:
+    """Conditional edge evaluating narrative critique validation and retry limit."""
+    validation_passed = state.get("validation_passed", False)
+    retry_count = state.get("critique_retry_count", 0)
+
+    if validation_passed:
+        logger.info("[Critique Edge] Validation passed. Proceeding to store.")
+        return "store"
+
+    if retry_count <= 1:
+        logger.info(f"[Critique Edge] Validation failed. Retrying generate_narrative (retry #{retry_count}).")
+        return "generate"
+
+    logger.warning(f"[Critique Edge] Validation failed and retry limit reached ({retry_count}). Proceeding to store.")
+    return "store"
+
+
 @traceable(name="SmartRecoAgent", run_type="chain")
 def build_recommendation_graph() -> StateGraph:
     """Construct and compile the recommendation StateGraph with LangSmith tracing."""
@@ -58,8 +65,9 @@ def build_recommendation_graph() -> StateGraph:
     workflow.add_node("analyze", analyze_behavior_node)
     workflow.add_node("retrieve", retrieve_candidates_node)
     workflow.add_node("evaluate", evaluate_and_rerank_node)
-    workflow.add_node("refetch_broaden", refetch_node)
+    workflow.add_node("refetch_broaden", refetch_broaden_node)
     workflow.add_node("generate", generate_narrative_node)
+    workflow.add_node("critique", critique_narrative_node)
     workflow.add_node("store", store_node)
 
     # Set Entry Point
@@ -80,10 +88,24 @@ def build_recommendation_graph() -> StateGraph:
     )
 
     workflow.add_edge("refetch_broaden", "retrieve")
-    workflow.add_edge("generate", "store")
+
+    # Wire Generate → Critique
+    workflow.add_edge("generate", "critique")
+
+    # Add Conditional Critique Edge
+    workflow.add_conditional_edges(
+        "critique",
+        should_retry_or_store,
+        {
+            "generate": "generate",
+            "store": "store"
+        }
+    )
+
     workflow.add_edge("store", END)
 
     return workflow.compile()
+
 
 
 # Compiled singleton graph app

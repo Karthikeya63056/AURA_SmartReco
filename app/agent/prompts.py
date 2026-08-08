@@ -13,6 +13,9 @@ Return ONLY a valid JSON object matching this schema:
 
 User Interaction Summary:
 {events_summary}
+
+Recurring Behavior Patterns:
+{recurring_patterns}
 """
 
 EVALUATOR_PROMPT = """You are an elite Educational Curriculum Evaluator and Re-ranker.
@@ -58,3 +61,52 @@ Rules:
 3. Write cleanly in GitHub Markdown with bolding for course titles.
 4. Keep length strictly between 150 and 250 words.
 """
+
+QUERY_REWRITE_PROMPT = """You are an expert at refining search queries for an educational course recommendation system.
+
+You have:
+- Original search query: "{original_query}"
+- User interests: {interests}
+- User skill level: {skill_level}
+- User intent: {intent}
+
+The previous retrieval using the original query did not return high-quality results (quality score < 60). Your task is to generate an **expanded, alternative, or reformulated search query** that is more likely to retrieve relevant courses.
+
+Think about:
+- Synonyms and related terms
+- Sub‑topics or adjacent areas
+- Different phrasing that might match course titles/descriptions better
+
+Output **only** a concise search query (5–10 words), no extra text.
+
+Rewritten query:"""
+
+NARRATIVE_FIX_INSTRUCTION = """The previous narrative was invalid because: {feedback}
+
+Please regenerate the narrative, ensuring you:
+1. Mention at least one of the recommended courses by name (titles are: {titles}).
+2. Keep the narrative between 120 and 280 words.
+3. Follow the original persuasive AIDA structure.
+"""
+
+REASON_GENERATION_PROMPT = """You are an expert at explaining why an educational course is a great fit for a learner.
+
+User Profile & Context:
+- Key Interests: {interests}
+- Skill Level: {skill_level}
+- Primary Intent: {intent}
+- Recent Search Query: {search_query}
+
+Recommended Courses:
+{courses_list}
+
+For each course listed above, write a concise, compelling 5–10 word reason explaining why it was recommended for this user.
+
+Return ONLY a valid JSON array of strings in the exact same order as the courses, for example:
+[
+  "Matched your search for 'LangGraph' and agent architectures",
+  "Tailored for your Intermediate level in AI & Machine Learning"
+]
+"""
+
+

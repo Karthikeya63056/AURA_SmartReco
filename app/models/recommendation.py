@@ -11,6 +11,7 @@ class Recommendation(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     narrative = Column(Text, nullable=False)
     product_ids_json = Column(JSON, nullable=False, default=list)  # [1, 5, 8]
+    product_reasons = Column(JSON, nullable=True, default=list)    # ["reason 1", "reason 2"]
     quality_score = Column(Integer, nullable=False, default=80)
     trigger_reason = Column(String, nullable=False)  # cold_start, high_intent, event_threshold, search_signal, staleness, manual
     is_active = Column(Boolean, default=True, nullable=False)

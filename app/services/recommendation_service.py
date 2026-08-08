@@ -1,9 +1,11 @@
 import json
 import logging
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 
 from app.agent.graph import recommendation_agent
+from app.agent.nodes import _build_recurring_pattern_summary
 from app.models.event import Event
 from app.models.product import Product
 from app.models.recommendation import Recommendation
@@ -47,21 +49,31 @@ class RecommendationService:
         """
         logger.info(f"Triggering LangGraph agent for user {user_id} (Reason: {trigger_reason})")
 
-        # Fetch last 15 events to summarize
+        # Fetch up to 50 events from the last 7 days
+        seven_days_ago = datetime.utcnow() - timedelta(days=7)
         recent_events = db.query(Event).filter(
-            Event.user_id == user_id
-        ).order_by(Event.created_at.desc()).limit(15).all()
+            Event.user_id == user_id,
+            Event.created_at >= seven_days_ago
+        ).order_by(Event.created_at.desc()).limit(50).all()
+
+        # Fallback: if no events in last 7 days, fetch top 50 recent events
+        if not recent_events:
+            recent_events = db.query(Event).filter(
+                Event.user_id == user_id
+            ).order_by(Event.created_at.desc()).limit(50).all()
 
         events_summary_list = []
         for e in recent_events:
             events_summary_list.append(f"- Event: {e.event_type} | Payload: {json.dumps(e.payload_json)}")
 
         events_summary_str = "\n".join(events_summary_list) if events_summary_list else "User just arrived on platform."
+        recurring_patterns_str = _build_recurring_pattern_summary(recent_events)
 
         initial_state = {
             "user_id": user_id,
             "trigger_reason": trigger_reason,
             "events_summary": events_summary_str,
+            "recurring_patterns": recurring_patterns_str,
             "user_profile": {},
             "search_query": "",
             "candidates": [],
@@ -69,7 +81,11 @@ class RecommendationService:
             "refetch_count": 0,
             "final_narrative": "",
             "recommended_product_ids": [],
-            "metadata": {}
+            "product_reasons": [],
+            "metadata": {},
+            "critique_retry_count": 0,
+            "critique_feedback": "",
+            "validation_passed": False
         }
 
         # Execute LangGraph workflow
@@ -85,6 +101,7 @@ class RecommendationService:
             "id": rec.id if rec else 0,
             "narrative": final_state.get("final_narrative", ""),
             "product_ids": final_state.get("recommended_product_ids", []),
+            "product_reasons": final_state.get("product_reasons", []),
             "quality_score": final_state.get("quality_score", 80),
             "trigger_reason": trigger_reason
         }
@@ -98,10 +115,16 @@ class RecommendationService:
         # Try cache
         cached_rec = cache.get(f"active_rec:{user_id}")
         if cached_rec:
-            # Attach product objects
+            # Attach product objects with paired reasons
             pids = cached_rec.get("product_ids", [])
+            reasons = cached_rec.get("product_reasons", [])
             fetched = [get_product(db, pid) for pid in pids]
-            cached_rec["products"] = [p for p in fetched if p]
+            products = []
+            for i, p in enumerate(fetched):
+                if p:
+                    p.reason = reasons[i] if i < len(reasons) else ""
+                    products.append(p)
+            cached_rec["products"] = products
             return cached_rec
 
         # Fetch from DB
@@ -112,12 +135,18 @@ class RecommendationService:
 
         if rec:
             pids = rec.product_ids_json or []
+            reasons = rec.product_reasons or []
             fetched = [get_product(db, pid) for pid in pids]
-            products = [p for p in fetched if p]
+            products = []
+            for i, p in enumerate(fetched):
+                if p:
+                    p.reason = reasons[i] if i < len(reasons) else ""
+                    products.append(p)
             result = {
                 "id": rec.id,
                 "narrative": rec.narrative,
                 "product_ids": pids,
+                "product_reasons": reasons,
                 "products": products,
                 "quality_score": rec.quality_score,
                 "trigger_reason": rec.trigger_reason,

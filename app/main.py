@@ -68,6 +68,7 @@ def recommendation_to_dict(rec: Optional[Recommendation]) -> Optional[Dict[str, 
         "id": rec.id,
         "narrative": rec.narrative or "",
         "product_ids": rec.product_ids_json or [],
+        "product_reasons": getattr(rec, "product_reasons", None) or [],
         "quality_score": rec.quality_score,
         "trigger_reason": rec.trigger_reason,
         "refetch_count": getattr(rec, "refetch_count", 0) or 0,
@@ -94,8 +95,18 @@ def build_user_stats(db: Session, user_id: int) -> Dict[str, int]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle: create tables, reindex, start scheduler."""
-    logger.info("Initializing SmartReco 2026 Database Tables...")
     Base.metadata.create_all(bind=engine)
+
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE recommendations ADD COLUMN product_reasons JSON"))
+            conn.commit()
+            logger.info("Migrated recommendations table: added product_reasons column.")
+    except Exception:
+        # Column already exists or table freshly created
+        pass
+
 
     try:
         from app.services.product_service import reindex_needs_reindex_products

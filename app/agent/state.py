@@ -5,6 +5,7 @@ class AgentState(TypedDict):
     user_id: int
     trigger_reason: str
     events_summary: str
+    recurring_patterns: str
     user_profile: Dict[str, Any]  # {"interests": [...], "skill_level": "...", "intent": "..."}
     search_query: str
     candidates: List[Dict[str, Any]]
@@ -12,4 +13,9 @@ class AgentState(TypedDict):
     refetch_count: int
     final_narrative: str
     recommended_product_ids: List[int]
+    product_reasons: List[str]
     metadata: Dict[str, Any]  # {"needs_refetch": bool, "eval_reasoning": str, ...}
+    critique_retry_count: int
+    critique_feedback: str
+    validation_passed: bool
+

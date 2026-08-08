@@ -501,6 +501,29 @@
   transform: translateY(-1px);
 }
 
+.rec-chip-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.rec-reason-chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--text-muted, #94a3b8);
+  background: rgba(34, 211, 238, 0.06);
+  border: 1px solid rgba(34, 211, 238, 0.12);
+  line-height: 1.5;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---------- STEP / FEATURE CARDS ---------- */
 .step-card {
   padding: var(--space-6);
