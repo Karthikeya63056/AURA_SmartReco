@@ -3,9 +3,13 @@
  * Batches events and flushes every 5s or 20 events.
  * Uses sendBeacon on unload so tracking never blocks the UI.
  *
- * Event types (aligned with TriggerEngine):
+ * Event types:
  *   page_view | course_impression | course_click | course_view
  *   search | wishlist | syllabus_view | enroll_preview | time_on_page
+ *   rec_click | rec_dismiss
+ *   faq_expand | instructor_view | share
+ *
+ * High-intent (TriggerEngine): wishlist | enroll_preview | syllabus_view
  */
 (function (global) {
   'use strict';
@@ -51,7 +55,6 @@
   function maybeRefreshRecommendations(trigger) {
     if (!trigger || !trigger.should_run_agent) return;
 
-    // Prefer explicit dashboard handler
     if (typeof global.triggerRecommendationRefresh === 'function') {
       try {
         global.triggerRecommendationRefresh({ silent: true });
@@ -70,7 +73,6 @@
       }
     }
 
-    // Fallback: click known refresh button ids
     const btn =
       document.getElementById('refreshBtn') ||
       document.getElementById('refresh-recs-btn');
@@ -133,7 +135,6 @@
       })
       .catch(function (err) {
         console.warn('[SmartTracker] flush error', err);
-        // Re-queue failed events (cap to avoid unbounded growth)
         if (queue.length < 100) {
           queue = eventsToSend.concat(queue).slice(0, 100);
         }
@@ -186,6 +187,36 @@
     });
   }
 
+  function trackEnrollPreview(courseId, title) {
+    track('enroll_preview', {
+      course_id: safeParseInt(courseId),
+      title: title || '',
+    });
+  }
+
+  function trackFaqExpand(courseId, title, question) {
+    track('faq_expand', {
+      course_id: safeParseInt(courseId),
+      title: title || '',
+      question: question || '',
+    });
+  }
+
+  function trackInstructorView(courseId, title) {
+    track('instructor_view', {
+      course_id: safeParseInt(courseId),
+      title: title || '',
+    });
+  }
+
+  function trackShare(courseId, title, url) {
+    track('share', {
+      course_id: safeParseInt(courseId),
+      title: title || '',
+      url: url || (typeof window !== 'undefined' ? window.location.href : ''),
+    });
+  }
+
   function trackRecommendationClick(recommendationId, productId) {
     track('rec_click', {
       recommendation_id: safeParseInt(recommendationId),
@@ -235,16 +266,23 @@
       const target = e.target.closest('[data-track-action]');
       if (!target) return;
 
+      // Prefer <details> toggle handler for FAQ (course.js) — still allow click signal
       const action = target.getAttribute('data-track-action');
       if (!action) return;
 
       const courseId = target.getAttribute('data-course-id');
       const title = target.getAttribute('data-course-title') || '';
 
-      track(action, {
+      const payload = {
         course_id: safeParseInt(courseId),
         title: title,
-      });
+      };
+
+      if (action === 'share') {
+        payload.url = window.location.href;
+      }
+
+      track(action, payload);
     });
   }
 
@@ -305,11 +343,14 @@
     trackSearch: trackSearch,
     trackWishlist: trackWishlist,
     trackSyllabusView: trackSyllabusView,
+    trackEnrollPreview: trackEnrollPreview,
+    trackFaqExpand: trackFaqExpand,
+    trackInstructorView: trackInstructorView,
+    trackShare: trackShare,
     trackRecommendationClick: trackRecommendationClick,
     trackRecommendationDismiss: trackRecommendationDismiss,
   };
 
-  // Expose globally for inline onclick handlers
   global.trackRecommendationClick = trackRecommendationClick;
   global.trackRecommendationDismiss = trackRecommendationDismiss;
 })(window);

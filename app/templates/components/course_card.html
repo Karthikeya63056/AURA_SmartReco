@@ -1,7 +1,20 @@
 {#
   Expects: course (Product-like object)
   Optional: source (string) — for analytics context in data attrs
+
+  Rich fields (optional / graceful fallbacks):
+    - course.rating
+    - course.skills_taught or course.tags
+    - course.metadata_json.instructor_name
+    - course.metadata_json.learner_count
+    - course.metadata_json.duration_weeks
 #}
+{% set meta = course.metadata_json if course.metadata_json is mapping else {} %}
+{% set instructor = meta.get('instructor_name', '') if meta else '' %}
+{% set learner_count = meta.get('learner_count', none) if meta else none %}
+{% set duration_weeks = meta.get('duration_weeks', none) if meta else none %}
+{% set skill_list = course.skills_taught if course.skills_taught else (course.tags if course.tags else []) %}
+
 <a href="/course/{{ course.id }}"
    class="course-card fade-in"
    data-course-id="{{ course.id }}"
@@ -11,9 +24,18 @@
   <div class="course-meta">
     <span class="badge badge-cyan">{{ course.category }}</span>
     <span class="badge">{{ course.level }}</span>
+    {% if duration_weeks %}
+      <span class="badge">{{ duration_weeks }} wk</span>
+    {% endif %}
   </div>
 
   <div class="course-title">{{ course.title }}</div>
+
+  {% if instructor %}
+  <div class="course-instructor" style="font-size:0.8rem; opacity:0.85; margin-top:4px;">
+    {{ instructor }}
+  </div>
+  {% endif %}
 
   <div class="course-desc">
     {% if course.description %}
@@ -21,7 +43,15 @@
     {% endif %}
   </div>
 
-  <div class="course-footer">
+  {% if skill_list %}
+  <div class="course-skills" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">
+    {% for skill in skill_list[:3] %}
+      <span class="badge" style="font-size:0.7rem;">{{ skill }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="course-footer" style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
     <span class="course-price">
       {% if course.price and course.price > 0 %}
         ${{ '%.0f'|format(course.price) }}
@@ -29,6 +59,15 @@
         Free
       {% endif %}
     </span>
-    <span class="course-level">{{ course.level }}</span>
+
+    <div style="display:flex; align-items:center; gap:10px; font-size:0.8rem; opacity:0.9;">
+      {% if course.rating is defined and course.rating is not none %}
+        <span class="course-rating" title="Rating">★ {{ '%.1f'|format(course.rating) }}</span>
+      {% endif %}
+      {% if learner_count %}
+        <span class="course-learners" title="Learners">{{ learner_count }} learners</span>
+      {% endif %}
+      <span class="course-level">{{ course.level }}</span>
+    </div>
   </div>
 </a>

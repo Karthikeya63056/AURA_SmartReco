@@ -229,9 +229,10 @@ p {
 }
 
 /* ---------- Hero shell (shared) ---------- */
+/* Give the recommendation column a bit more width for readable narratives */
 .hero {
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
+  grid-template-columns: 1fr 1.15fr;
   gap: var(--space-10);
   align-items: center;
   max-width: var(--max-width);

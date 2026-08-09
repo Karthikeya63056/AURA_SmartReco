@@ -12,11 +12,15 @@
 {% set rec_id = recommendation.id if recommendation and recommendation.id is defined else 0 %}
 
 <div class="rec-side-card {{ card_class }}" data-recommendation-id="{{ rec_id }}">
-  <div class="rec-label">
-    <span class="dot pulse-ring"></span>
-    AURA Recommendation
+  <div class="rec-header">
+    <div class="rec-label">
+      <span class="dot pulse-ring"></span>
+      AURA Recommendation
+    </div>
     {% if recommendation and recommendation.narrative %}
-    <button class="rec-dismiss-btn" title="Not interested"
+    <button type="button"
+            class="rec-dismiss-btn"
+            title="Not interested"
             onclick="handleRecommendationDismiss(this)"
             data-recommendation-id="{{ rec_id }}">✕</button>
     {% endif %}

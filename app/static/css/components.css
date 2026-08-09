@@ -345,13 +345,16 @@
 /* ---------- 🌌 HOLOGRAPHIC RECOMMENDATION CARD ---------- */
 .rec-side-card {
   position: relative;
-  padding: var(--space-6);
+  width: 100%;
+  min-width: 0;
+  max-width: 560px;
+  padding: var(--space-6) var(--space-7);
   background: var(--bg-card);
   border-radius: var(--radius-xl);
-  border: none; /* Remove standard border */
-  overflow: visible; /* Allow glow to spill out */
+  border: none;
+  overflow: visible;
   isolation: isolate;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
   transition: transform var(--duration) var(--ease-out);
 }
 
@@ -359,20 +362,18 @@
   transform: translateY(-4px);
 }
 
-/* The Animated Holographic Border */
+/* Animated holographic border */
 .rec-side-card::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  padding: 1.5px; /* Border thickness */
+  padding: 1.5px;
   background: var(--aurora-gradient, linear-gradient(135deg, #8b5cf6 0%, #ec4899 50%, #f59e0b 100%));
   background-size: 300% 300%;
   animation: holo-border 6s linear infinite;
-  
-  /* Masking trick to make it only show on the border */
-  -webkit-mask: 
-    linear-gradient(#fff 0 0) content-box, 
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
     linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
@@ -380,7 +381,7 @@
   pointer-events: none;
 }
 
-/* The glowing aura behind the card */
+/* Glowing aura behind the card */
 .rec-side-card::after {
   content: '';
   position: absolute;
@@ -398,6 +399,15 @@
   box-shadow: var(--glow-cyan-lg);
 }
 
+/* Header row: label left, dismiss right */
+.rec-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
 .rec-label {
   display: inline-flex;
   align-items: center;
@@ -405,13 +415,14 @@
   font-size: var(--text-xs);
   font-family: var(--font-mono);
   background: var(--aurora-soft, rgba(236, 72, 153, 0.12));
-  color: var(--aurora-2, #ec4899); /* Magenta text */
+  color: var(--aurora-2, #ec4899);
   padding: 4px 12px;
   border-radius: var(--radius-full);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
-  margin-bottom: var(--space-4);
+  margin-bottom: 0;
   border: 1px solid rgba(236, 72, 153, 0.3);
+  position: static;
 }
 
 .rec-label .dot {
@@ -439,9 +450,10 @@
 }
 
 .rec-narrative {
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
+  font-size: var(--text-base);
+  line-height: 1.7;
   color: var(--text-muted);
+  max-width: 52ch;
 }
 
 .rec-narrative strong,
@@ -474,29 +486,27 @@
   color: var(--text-muted);
 }
 
-.rec-label {
-  position: relative;
-}
-
+/* Dismiss control — right side of header */
 .rec-dismiss-btn {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  position: static;
+  transform: none;
+  flex-shrink: 0;
+  margin-left: auto;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-full);
   color: var(--text-muted, #94a3b8);
-  font-size: 0.7rem;
-  width: 24px;
-  height: 24px;
+  font-size: 0.75rem;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-out),
-              color var(--duration-fast) var(--ease-out),
-              border-color var(--duration-fast) var(--ease-out);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
   line-height: 1;
   padding: 0;
 }
@@ -551,7 +561,7 @@
   background: rgba(34, 211, 238, 0.06);
   border: 1px solid rgba(34, 211, 238, 0.12);
   line-height: 1.5;
-  max-width: 220px;
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -995,7 +1005,7 @@
 .btn-cyan {
   position: relative;
   overflow: hidden;
-  box-shadow: none; /* remove the radiant glow */
+  box-shadow: none;
 }
 
 .btn-cyan::after {
@@ -1055,6 +1065,12 @@
   text-shadow: none;
 }
 
+/* Dashboard: let the rec card use full column width */
+.dashboard-hero .rec-side-card {
+  max-width: 100%;
+  width: 100%;
+}
+
 /* ---------- ADMIN TABLE ---------- */
 .glass-table-wrapper {
   background: var(--bg-card, rgba(15, 23, 42, 0.6));
@@ -1099,4 +1115,108 @@
 
 .admin-table tbody tr:last-child {
   border-bottom: none;
-}
+}
+
+/* ============================================================
+   Course detail readability — stronger text, same background
+   ============================================================ */
+.detail {
+  color: var(--text, #f0f0f2);
+}
+
+.detail h1,
+.detail h2,
+.detail .section-title {
+  color: #ffffff;
+  font-weight: 650;
+}
+
+.detail-desc,
+.detail p,
+.detail .instructor-bio,
+.detail .faq-answer,
+.detail .faq-item p,
+.detail .skill-list,
+.detail .prereq-list,
+.detail .detail-meta-item .label {
+  color: #d4d4dc !important;   /* was ~#8b8b96 — clearer body */
+  font-weight: 450;
+  line-height: 1.7;
+}
+
+.detail .detail-meta-item .value,
+.detail .instructor-name,
+.detail .faq-item summary,
+.detail .faq-item summary span,
+.detail .syllabus-item,
+.detail .syllabus-item span:not(.idx) {
+  color: #f0f0f2 !important;
+  font-weight: 500;
+}
+
+.detail .syllabus-item {
+  background: rgba(12, 12, 16, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.detail .syllabus-item .idx {
+  color: var(--cyan, #22d3ee);
+  font-weight: 600;
+}
+
+/* FAQ accordion */
+.detail .faq-item,
+.detail details.faq-item {
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(10, 10, 14, 0.55);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+}
+
+.detail .faq-item summary {
+  color: #f5f5f7 !important;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.detail .faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.detail .faq-item[open] summary,
+.detail .faq-item summary:hover {
+  color: #ffffff !important;
+}
+
+.detail .faq-answer,
+.detail .faq-item p {
+  color: #cfcfd8 !important;
+  margin-top: 8px;
+}
+
+/* Instructor card */
+.detail .instructor-card,
+.detail #instructorSection {
+  background: rgba(10, 10, 14, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+
+.detail .instructor-name {
+  color: #ffffff !important;
+  font-weight: 600;
+}
+
+.detail .instructor-bio {
+  color: #d0d0d8 !important;
+}
+
+/* Skills / requirements chips stay readable */
+.detail .skill-chip,
+.detail .prereq-chip {
+  color: #e8e8ef;
+  border-color: rgba(255, 255, 255, 0.14);
+}

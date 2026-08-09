@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any, Literal
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, field_validator
 import json
 
@@ -18,6 +18,10 @@ ALLOWED_EVENT_TYPES = {
     "course_impression",
     "rec_click",
     "rec_dismiss",
+    # High-value intent / exploration signals (Phase 1 frontend)
+    "faq_expand",
+    "instructor_view",
+    "share",
 }
 
 MAX_PAYLOAD_BYTES = 5 * 1024  # 5 KB
@@ -27,7 +31,12 @@ class EventBatchItem(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=128)
     event_type: str = Field(
         ...,
-        description="One of: page_view, search, click, wishlist, time_on_page, syllabus_view, enroll_preview"
+        description=(
+            "One of: page_view, search, click, wishlist, time_on_page, "
+            "syllabus_view, enroll_preview, course_click, course_view, "
+            "course_impression, rec_click, rec_dismiss, faq_expand, "
+            "instructor_view, share"
+        ),
     )
     payload_json: Dict[str, Any] = Field(default_factory=dict)
     idempotency_key: Optional[str] = Field(default=None, max_length=128)

@@ -4,7 +4,7 @@ os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, Request, Depends, status, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -103,7 +103,10 @@ def build_user_stats(db: Session, user_id: int) -> Dict[str, int]:
         if isinstance(payload, dict):
             course_id = payload.get("course_id")
             if course_id is not None:
-                viewed_ids.add(int(course_id))
+                try:
+                    viewed_ids.add(int(course_id))
+                except (TypeError, ValueError):
+                    pass
     return {
         "courses_viewed": len(viewed_ids),
         "events": db.query(Event).filter(Event.user_id == user_id).count(),
@@ -111,6 +114,94 @@ def build_user_stats(db: Session, user_id: int) -> Dict[str, int]:
         .filter(Recommendation.user_id == user_id)
         .count(),
     }
+
+
+def build_recently_viewed(db: Session, user_id: int, limit: int = 8) -> List[Dict[str, Any]]:
+    """
+    Last unique course_view events for the user, newest first.
+    Returns template-safe dicts with product fields when the course still exists.
+    """
+    events = (
+        db.query(Event)
+        .filter(
+            Event.user_id == user_id,
+            Event.event_type == "course_view",
+        )
+        .order_by(Event.created_at.desc())
+        .limit(40)
+        .all()
+    )
+
+    seen = set()
+    ordered_ids: List[int] = []
+    titles_fallback: Dict[int, str] = {}
+    viewed_at: Dict[int, Any] = {}
+
+    for ev in events:
+        payload = ev.payload_json if isinstance(ev.payload_json, dict) else {}
+        raw_id = payload.get("course_id")
+        if raw_id is None:
+            continue
+        try:
+            cid = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if cid in seen:
+            continue
+        seen.add(cid)
+        ordered_ids.append(cid)
+        titles_fallback[cid] = str(payload.get("title") or "")
+        viewed_at[cid] = ev.created_at
+        if len(ordered_ids) >= limit:
+            break
+
+    if not ordered_ids:
+        return []
+
+    products = (
+        db.query(Product)
+        .filter(Product.id.in_(ordered_ids))
+        .all()
+    )
+    by_id = {p.id: p for p in products}
+
+    result: List[Dict[str, Any]] = []
+    for cid in ordered_ids:
+        product = by_id.get(cid)
+        if product:
+            result.append(
+                {
+                    "id": product.id,
+                    "title": product.title,
+                    "category": product.category,
+                    "level": product.level,
+                    "price": product.price,
+                    "rating": product.rating,
+                    "description": product.description,
+                    "skills_taught": product.skills_taught or [],
+                    "tags": product.tags or [],
+                    "metadata_json": product.metadata_json or {},
+                    "viewed_at": viewed_at.get(cid),
+                }
+            )
+        else:
+            # Course removed but still show a trail entry
+            result.append(
+                {
+                    "id": cid,
+                    "title": titles_fallback.get(cid) or f"Course #{cid}",
+                    "category": "",
+                    "level": "",
+                    "price": None,
+                    "rating": None,
+                    "description": "",
+                    "skills_taught": [],
+                    "tags": [],
+                    "metadata_json": {},
+                    "viewed_at": viewed_at.get(cid),
+                }
+            )
+    return result
 
 
 @asynccontextmanager
@@ -151,8 +242,6 @@ async def lifespan(app: FastAPI):
     except Exception:
         # Columns already exist or tables freshly created
         pass
-
-
 
     try:
         from app.services.product_service import reindex_needs_reindex_products
@@ -267,6 +356,8 @@ def page_dashboard(
         .first()
     )
 
+    recently_viewed = build_recently_viewed(db, user.id, limit=8)
+
     return templates.TemplateResponse(
         "pages/dashboard.html",
         {
@@ -275,6 +366,7 @@ def page_dashboard(
             "courses": courses,
             "recommendation": recommendation_to_dict(rec_row),
             "stats": build_user_stats(db, user.id),
+            "recently_viewed": recently_viewed,
         },
     )
 

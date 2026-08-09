@@ -53,6 +53,28 @@
   </div>
 </section>
 
+{# Feature 6 — Recently Viewed timeline (fed by build_recently_viewed in main.py) #}
+<section class="section dashboard-recent fade-in" style="padding-top:10px; padding-bottom:20px;">
+  <div class="section-header">
+    <h2 class="section-title">Recently Viewed</h2>
+    <a href="/catalog" class="section-link">Browse catalog →</a>
+  </div>
+
+  {% if recently_viewed %}
+  <div class="course-grid stagger">
+    {% for course in recently_viewed[:8] %}
+      {% with course=course, source='recently_viewed' %}
+        {% include "components/course_card.html" %}
+      {% endwith %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-muted" style="margin-top:8px;">
+    No course views yet. Open a course from the catalog — AURA will track your journey here.
+  </p>
+  {% endif %}
+</section>
+
 <section class="section dashboard-continue fade-in" style="padding-top:10px;">
   <div class="section-header">
     <h2 class="section-title">Continue Learning</h2>

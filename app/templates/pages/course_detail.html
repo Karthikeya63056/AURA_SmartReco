@@ -2,22 +2,75 @@
 {% block title %}{{ course.title }}{% endblock %}
 
 {% block content %}
+{% set meta = course.metadata_json if course.metadata_json is mapping else {} %}
+{% set instructor = meta.get('instructor_name', '') if meta else '' %}
+{% set instructor_bio = meta.get('instructor_bio', '') if meta else '' %}
+{% set learner_count = meta.get('learner_count', none) if meta else none %}
+{% set duration_weeks = meta.get('duration_weeks', none) if meta else none %}
+{% set language = meta.get('language', 'English') if meta else 'English' %}
+{% set certificate = meta.get('certificate', false) if meta else false %}
+{% set faq_list = meta.get('faq', []) if meta else [] %}
+{% set skills = course.skills_taught if course.skills_taught else [] %}
+{% set requirements = course.prerequisites if course.prerequisites else [] %}
+
 <section class="detail fade-in"
          id="courseDetail"
          data-course-id="{{ course.id }}"
          data-course-title="{{ course.title }}">
 
-  <div class="course-meta" style="margin-bottom:8px;">
+  <div class="course-meta" style="margin-bottom:8px; display:flex; flex-wrap:wrap; gap:8px;">
     <span class="badge badge-cyan">{{ course.category }}</span>
     <span class="badge">{{ course.level }}</span>
+    {% if duration_weeks %}
+      <span class="badge">{{ duration_weeks }} weeks</span>
+    {% endif %}
+    {% if language %}
+      <span class="badge">{{ language }}</span>
+    {% endif %}
+    {% if certificate %}
+      <span class="badge">Certificate</span>
+    {% endif %}
   </div>
 
   <h1>{{ course.title }}</h1>
 
+  {% if instructor %}
+  <p style="opacity:0.85; margin-top:4px; margin-bottom:12px;">
+    Instructor: <strong>{{ instructor }}</strong>
+    {% if learner_count %} · {{ learner_count }} learners{% endif %}
+    {% if course.rating is defined and course.rating is not none %}
+      · ★ {{ '%.1f'|format(course.rating) }}
+    {% endif %}
+  </p>
+  {% endif %}
+
   <p class="detail-desc">{{ course.description }}</p>
 
-  <div class="detail-actions">
-    <button type="button" class="btn btn-cyan btn-lg" id="interestBtn">I'm Interested</button>
+  <div class="detail-actions" style="display:flex; flex-wrap:wrap; gap:10px; margin:20px 0;">
+    <button type="button"
+            class="btn btn-cyan btn-lg"
+            id="enrollBtn"
+            data-track-action="enroll_preview"
+            data-course-id="{{ course.id }}"
+            data-course-title="{{ course.title }}">
+      Enroll Preview
+    </button>
+    <button type="button"
+            class="btn btn-outline btn-lg"
+            id="wishlistBtn"
+            data-track-action="wishlist"
+            data-course-id="{{ course.id }}"
+            data-course-title="{{ course.title }}">
+      Save
+    </button>
+    <button type="button"
+            class="btn btn-outline btn-lg"
+            id="shareBtn"
+            data-track-action="share"
+            data-course-id="{{ course.id }}"
+            data-course-title="{{ course.title }}">
+      Share
+    </button>
     <a href="/catalog" class="btn btn-outline btn-lg">Back to Catalog</a>
   </div>
 
@@ -39,20 +92,104 @@
     {% if course.rating is defined and course.rating is not none %}
     <div class="detail-meta-item">
       <div class="label">Rating</div>
-      <div class="value">{{ '%.1f'|format(course.rating) }}</div>
+      <div class="value">★ {{ '%.1f'|format(course.rating) }}</div>
+    </div>
+    {% endif %}
+    {% if duration_weeks %}
+    <div class="detail-meta-item">
+      <div class="label">Duration</div>
+      <div class="value">{{ duration_weeks }} weeks</div>
+    </div>
+    {% endif %}
+    {% if learner_count %}
+    <div class="detail-meta-item">
+      <div class="label">Learners</div>
+      <div class="value">{{ learner_count }}</div>
     </div>
     {% endif %}
   </div>
+
+  {% if skills %}
+  <div style="margin-top:40px;">
+    <h2 class="section-title" style="margin-bottom:16px;">What you'll learn</h2>
+    <ul style="list-style:none; padding:0; margin:0; display:grid; gap:10px;">
+      {% for skill in skills %}
+      <li style="display:flex; gap:10px; align-items:flex-start;">
+        <span aria-hidden="true">✓</span>
+        <span>{{ skill }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;">
+      {% for skill in skills %}
+        <span class="badge badge-cyan">{{ skill }}</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if requirements %}
+  <div style="margin-top:36px;">
+    <h2 class="section-title" style="margin-bottom:16px;">Requirements</h2>
+    <ul style="margin:0; padding-left:18px; line-height:1.7;">
+      {% for req in requirements %}
+        <li>{{ req }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  {% if instructor %}
+  <div id="instructorSection"
+       class="instructor-card"
+       data-track-action="instructor_view"
+       data-course-id="{{ course.id }}"
+       data-course-title="{{ course.title }}"
+       style="margin-top:36px; padding:18px; border-radius:12px; border:1px solid rgba(255,255,255,0.08); cursor:pointer;">
+    <h2 class="section-title" style="margin-bottom:10px;">About the instructor</h2>
+    <div style="font-weight:600; margin-bottom:6px;">{{ instructor }}</div>
+    {% if instructor_bio %}
+      <p style="opacity:0.85; margin:0; line-height:1.6;">{{ instructor_bio }}</p>
+    {% else %}
+      <p style="opacity:0.75; margin:0;">Experienced instructor for {{ course.category }} courses.</p>
+    {% endif %}
+  </div>
+  {% endif %}
 
   {% if course.syllabus %}
   <div class="syllabus-list" style="margin-top:40px;">
     <h2 class="section-title" style="margin-bottom:16px;">Syllabus</h2>
     {% for item in course.syllabus %}
-    <div class="syllabus-item" data-track-action="syllabus_view" data-course-id="{{ course.id }}">
+    <div class="syllabus-item"
+         data-track-action="syllabus_view"
+         data-course-id="{{ course.id }}"
+         data-course-title="{{ course.title }}">
       <span class="idx">{{ '%02d'|format(loop.index) }}</span>
       <span>{{ item if item is string else item.title | default(item) }}</span>
     </div>
     {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if faq_list %}
+  <div style="margin-top:40px;">
+    <h2 class="section-title" style="margin-bottom:16px;">FAQ</h2>
+    <div class="faq-list" style="display:grid; gap:10px;">
+      {% for item in faq_list %}
+      <details class="faq-item"
+               data-track-action="faq_expand"
+               data-course-id="{{ course.id }}"
+               data-course-title="{{ course.title }}"
+               style="padding:12px 14px; border-radius:10px; border:1px solid rgba(255,255,255,0.08);">
+        <summary style="cursor:pointer; font-weight:600;">
+          {{ item.q if item is mapping else item }}
+        </summary>
+        {% if item is mapping and item.a %}
+        <p style="margin:10px 0 0; opacity:0.85; line-height:1.6;">{{ item.a }}</p>
+        {% endif %}
+      </details>
+      {% endfor %}
+    </div>
   </div>
   {% endif %}
 </section>
