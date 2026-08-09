@@ -3,30 +3,32 @@
 
 {% block content %}
 <section class="section search-page fade-in">
-  <div class="hero-badge" style="margin-bottom:18px;">Search Courses</div>
+  <div class="search-hero">
+    <div class="hero-badge">Search Courses</div>
 
-  <h1 class="section-title" style="font-size: clamp(2rem, 4vw, 2.6rem); margin-bottom:20px;">
-    Find your next course
-  </h1>
+    <h1>Find your next course</h1>
 
-  <form class="search-form" action="/search" method="GET">
-    <input
-      type="search"
-      name="q"
-      value="{{ query or '' }}"
-      placeholder="Search by topic, skill, or keyword…"
-      required
-      autocomplete="off"
-    >
-    <button type="submit" class="btn btn-cyan">Search</button>
-  </form>
+    <p class="search-sub">Semantic search across the full catalog — topics, skills, and keywords.</p>
 
-  {% if query %}
-  <p class="search-meta">
-    Showing results for “<span class="query">{{ query }}</span>”
-    {% if courses %} · {{ courses|length }} found{% endif %}
-  </p>
-  {% endif %}
+    <form class="search-form" action="/search" method="GET">
+      <input
+        type="search"
+        name="q"
+        value="{{ query or '' }}"
+        placeholder="Search by topic, skill, or keyword…"
+        required
+        autocomplete="off"
+      >
+      <button type="submit" class="btn btn-cyan">Search</button>
+    </form>
+
+    {% if query %}
+    <p class="search-meta">
+      Showing results for “<span class="query">{{ query }}</span>”
+      {% if courses %} · {{ courses|length }} found{% endif %}
+    </p>
+    {% endif %}
+  </div>
 </section>
 
 <section class="section fade-in"
@@ -50,7 +52,7 @@
       <a href="/catalog" class="btn btn-outline">Browse Catalog</a>
     </div>
   {% else %}
-    <p class="text-muted">Enter a query to search the catalog.</p>
+    <p class="text-muted search-hint">Enter a query to search the catalog.</p>
   {% endif %}
 </section>
 {% endblock %}

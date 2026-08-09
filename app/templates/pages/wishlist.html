@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Wishlist{% endblock %}
+
+{% block content %}
+<section class="section catalog-page fade-in">
+  <div class="section-header">
+    <h1 class="section-title">Your wishlist</h1>
+    <a href="/catalog" class="section-link">Browse more →</a>
+  </div>
+
+  {% if courses %}
+  <div class="course-grid">
+    {% for course in courses %}
+    <div class="course-card wishlist-card">
+      <div class="course-meta">
+        <span class="badge badge-cyan">{{ course.category }}</span>
+        <span class="badge">{{ course.level }}</span>
+      </div>
+      <h3 class="course-title">{{ course.title }}</h3>
+      <p class="course-desc">{{ course.description | truncate(140) }}</p>
+      <div class="course-footer">
+        <span class="course-price">
+          {% if course.price and course.price > 0 %}${{ '%.0f'|format(course.price) }}{% else %}Free{% endif %}
+        </span>
+        <div style="display:flex; gap:8px;">
+          <a href="/course/{{ course.id }}" class="btn btn-outline btn-sm">View</a>
+          <button type="button" class="btn btn-danger btn-sm" data-remove-wishlist="{{ course.id }}">Remove</button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="activity-note" style="margin-top:16px;">
+    {{ courses|length }} saved course(s). Wishlist changes also feed your behavioral profile.
+  </p>
+  {% else %}
+  <div class="empty-state">
+    <h3>Your wishlist is empty</h3>
+    <p>Tap “Save to wishlist” on any course and it will wait for you here.</p>
+    <a href="/catalog" class="btn btn-cyan">Browse Catalog</a>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('[data-remove-wishlist]').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var id = btn.getAttribute('data-remove-wishlist');
+    fetch('/api/wishlist/' + id, { method: 'POST', credentials: 'include' })
+      .then(function (r) { if (!r.ok) throw new Error('toggle failed'); return r.json(); })
+      .then(function () { window.location.reload(); })
+      .catch(function () { alert('Could not update your wishlist.'); });
+  });
+});
+</script>
+{% endblock %}

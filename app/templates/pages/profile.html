@@ -2,117 +2,212 @@
 {% block title %}Profile{% endblock %}
 
 {% block content %}
+{% set prof = profile if profile is defined and profile else (user_profile if user_profile is defined and user_profile else None) %}
+{% set acts = events if events is defined and events else (activity if activity is defined and activity else (recent_events if recent_events is defined and recent_events else None)) %}
+
 <section class="section profile-page fade-in">
-  <div class="section-header">
+
+  <!-- ============ HEADER ============ -->
+  <div class="profile-head">
     <div>
       <h1 class="section-title">Your profile</h1>
-      <p class="text-muted" style="margin-top:8px;">
-        {{ user.email if user else '' }}
-      </p>
+      <p class="profile-email">{{ user.email }}</p>
     </div>
     <a href="/dashboard" class="section-link">Dashboard →</a>
   </div>
 
-  <div class="admin-stats stagger" style="margin-bottom:40px;">
-    <div class="stat-card fade-in">
+  <!-- ============ STATS ============ -->
+  <div class="stats-row profile-stats">
+    <div class="stat-card">
       <div class="stat-value">{{ stats.courses_viewed if stats else 0 }}</div>
-      <div class="stat-label">Courses Viewed</div>
+      <div class="stat-label">Courses viewed</div>
     </div>
-    <div class="stat-card fade-in">
+    <div class="stat-card">
       <div class="stat-value">{{ stats.events if stats else 0 }}</div>
-      <div class="stat-label">Events</div>
+      <div class="stat-label">Events tracked</div>
     </div>
-    <div class="stat-card fade-in">
+    <div class="stat-card">
       <div class="stat-value">{{ stats.recommendations if stats else 0 }}</div>
       <div class="stat-label">Recommendations</div>
     </div>
-    <div class="stat-card fade-in">
-      <div class="stat-value status-live">Live</div>
-      <div class="stat-label">Profile</div>
+    <div class="stat-card">
+      <div class="stat-value">{{ prof.skill_level if prof else '—' }}</div>
+      <div class="stat-label">Skill level</div>
     </div>
   </div>
 
-  <div class="profile-grid" style="margin-bottom:48px;">
-    <div class="profile-panel">
-      <h2>Living profile</h2>
-      {% if user_profile %}
+  <!-- ============ LEFT COLUMN + LATEST REC ============ -->
+  <div class="profile-grid">
+    <div class="profile-col">
+
+      <!-- Living profile -->
+      <div class="profile-panel">
+        <h2>Living profile</h2>
+
         <div class="profile-field">
           <div class="label">Interests</div>
           <div class="interest-tags">
-            {% if user_profile.interests_json %}
-              {% for interest in user_profile.interests_json %}
+            {% if prof and prof.interests_json %}
+              {% for interest in prof.interests_json %}
                 <span class="badge badge-cyan">{{ interest }}</span>
               {% endfor %}
             {% else %}
-              <span class="text-muted text-sm">Not detected yet</span>
+              <span class="text-dim text-sm">Explore a few courses and AURA will infer your interests.</span>
             {% endif %}
           </div>
         </div>
+
         <div class="profile-field">
           <div class="label">Skill level</div>
-          <div class="value">{{ user_profile.skill_level or 'Not detected yet' }}</div>
+          <div class="value">{{ prof.skill_level if prof else '—' }}</div>
         </div>
+
         <div class="profile-field">
           <div class="label">Current intent</div>
-          <div class="value">{{ user_profile.intent or 'Exploring' }}</div>
+          <div class="value">{{ prof.intent if prof else '—' }}</div>
         </div>
-      {% else %}
-        <p class="text-muted" style="font-size:0.95rem; line-height:1.65;">
-          AURA has not built a profile yet. Explore a few courses — the agent will
-          start understanding your interests automatically.
+
+        <p class="profile-explain">
+          Re-inferred from your last 50 on-platform events every time the agent runs.
+          Only on-platform activity is used — nothing external, ever.
         </p>
-      {% endif %}
-    </div>
+      </div>
 
-    <div class="profile-panel">
-      <h2>Latest recommendation</h2>
-      {% with recommendation=recommendation, show_chips=true %}
-        {% include "components/recommendation_card.html" %}
-      {% endwith %}
-    </div>
-  </div>
+      <!-- What AURA noticed -->
+      <div class="profile-panel">
+        <h2>What AURA noticed</h2>
 
-  <div class="section-header">
-    <h2 class="section-title">Recent activity</h2>
-  </div>
+        {# Prefer backend all-time counts; fall back to counting the recent slice #}
+        {% set sig = signals if signals is defined and signals else None %}
+        {% if not sig %}
+          {% set ns = namespace(view=0, search=0, click=0, wish=0, syll=0, faq=0) %}
+          {% for e in acts or [] %}
+            {% if e.event_type == 'course_view' %}{% set ns.view = ns.view + 1 %}
+            {% elif e.event_type == 'search' %}{% set ns.search = ns.search + 1 %}
+            {% elif e.event_type == 'course_click' %}{% set ns.click = ns.click + 1 %}
+            {% elif e.event_type == 'wishlist' %}{% set ns.wish = ns.wish + 1 %}
+            {% elif e.event_type == 'syllabus_view' %}{% set ns.syll = ns.syll + 1 %}
+            {% elif e.event_type == 'faq_expand' %}{% set ns.faq = ns.faq + 1 %}
+            {% endif %}
+          {% endfor %}
+          {% set sig = {'course_view': ns.view, 'search': ns.search, 'course_click': ns.click,
+                        'wishlist': ns.wish, 'syllabus_view': ns.syll, 'faq_expand': ns.faq} %}
+        {% endif %}
 
-  {% if recent_events %}
-    <div class="activity-list">
-      {% for event in recent_events[:10] %}
-      <div class="activity-item">
-        <div>
-          <div class="event-type">{{ event.event_type }}</div>
-          <div class="text-dim text-xs" style="margin-top:4px; max-width:52ch; overflow:hidden; text-overflow:ellipsis;">
-            {{ event.payload_json | tojson }}
-          </div>
+        <div class="signal-grid">
+          <div class="signal-chip"><span class="signal-num">{{ sig.get('course_view', 0) }}</span><span class="signal-label">Course views</span></div>
+          <div class="signal-chip"><span class="signal-num">{{ sig.get('search', 0) }}</span><span class="signal-label">Searches</span></div>
+          <div class="signal-chip"><span class="signal-num">{{ sig.get('course_click', 0) }}</span><span class="signal-label">Card clicks</span></div>
+          <div class="signal-chip"><span class="signal-num">{{ sig.get('wishlist', 0) }}</span><span class="signal-label">Wishlists</span></div>
+          <div class="signal-chip"><span class="signal-num">{{ sig.get('syllabus_view', 0) }}</span><span class="signal-label">Syllabus opens</span></div>
+          <div class="signal-chip"><span class="signal-num">{{ sig.get('faq_expand', 0) }}</span><span class="signal-label">FAQ reads</span></div>
         </div>
-        <div class="event-time">
-          {% if event.created_at %}{{ event.created_at.strftime('%b %d, %H:%M') }}{% else %}—{% endif %}
+        <p class="profile-explain">All-time signals like these decide when the agent runs and what it recommends next.</p>
+      </div>
+
+      <!-- Account -->
+      <div class="profile-panel">
+        <h2>Account</h2>
+        <div class="profile-field">
+          <div class="label">Member since</div>
+          <div class="value">{% if user.created_at %}{{ user.created_at.strftime('%B %Y') }}{% else %}—{% endif %}</div>
+        </div>
+        <div class="profile-field">
+          <div class="label">Role</div>
+          <div class="value">{{ 'Administrator' if user.is_admin else 'Member' }}</div>
+        </div>
+        <div class="profile-field">
+          <div class="label">Email</div>
+          <div class="value">{{ user.email }}</div>
         </div>
       </div>
+
+    </div>
+
+    <!-- Latest recommendation -->
+    <div class="profile-panel">
+      <h2>Latest recommendation</h2>
+      {% if recommendation %}
+        {% with recommendation=recommendation, rec_id=recommendation.id %}
+          {% include "components/recommendation_card.html" %}
+        {% endwith %}
+      {% else %}
+        <div class="empty-state">
+          <h3>No recommendation yet</h3>
+          <p>Browse a few courses — the agent will write your first narrative.</p>
+          <a href="/catalog" class="btn btn-outline">Browse Catalog</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ============ RECENT ACTIVITY ============ -->
+  <div class="activity-section">
+    <h2 class="section-title">Recent activity</h2>
+    <p class="profile-sub">How AURA sees your last events — in plain language.</p>
+
+    {% if acts %}
+    <div class="activity-list">
+      {% for e in acts[:12] %}
+        {% set p = e.payload_json or {} %}
+        <div class="activity-item">
+          <div class="activity-main">
+            <span class="event-type">{{ e.event_type }}</span>
+            <span class="activity-desc">
+              {%- if e.event_type == 'search' -%}
+                Searched for “{{ p.get('query', '…') }}”
+              {%- elif e.event_type == 'course_view' -%}
+                Viewed “{{ p.get('title', 'a course') }}”
+              {%- elif e.event_type == 'course_click' -%}
+                Clicked “{{ p.get('title', 'a course') }}”
+              {%- elif e.event_type == 'wishlist' -%}
+                Saved “{{ p.get('title', 'a course') }}” to wishlist
+              {%- elif e.event_type == 'syllabus_view' -%}
+                Expanded the syllabus of “{{ p.get('title', 'a course') }}”
+              {%- elif e.event_type == 'faq_expand' -%}
+                Read FAQ: “{{ p.get('question', '…') }}”
+              {%- elif e.event_type == 'instructor_view' -%}
+                Checked the instructor of “{{ p.get('title', 'a course') }}”
+              {%- elif e.event_type == 'time_on_page' -%}
+                Spent {{ p.get('time_spent_seconds', 0) }}s on {{ p.get('url', 'a page') }}
+              {%- elif e.event_type == 'page_view' -%}
+                Visited {{ p.get('url', 'a page') }}
+              {%- elif e.event_type == 'rec_click' -%}
+                Clicked a recommended course
+              {%- elif e.event_type == 'rec_dismiss' -%}
+                Dismissed a recommendation
+              {%- else -%}
+                {{ e.event_type }}
+              {%- endif -%}
+            </span>
+          </div>
+          <span class="event-time">{{ e.created_at.strftime('%b %d, %H:%M') }}</span>
+        </div>
       {% endfor %}
     </div>
-  {% else %}
-    <div class="empty-state">
-      <h3>No activity yet</h3>
-      <p>Browse the catalog to start building your behavioral signal.</p>
-      <a href="/catalog" class="btn btn-outline">Browse Courses</a>
-    </div>
-  {% endif %}
+    <p class="activity-note">Showing your 12 most recent events.</p>
+    {% else %}
+      <div class="empty-state">
+        <h3>No activity yet</h3>
+        <p>Your views, searches and clicks will appear here as AURA observes them.</p>
+      </div>
+    {% endif %}
+  </div>
+
 </section>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  document.addEventListener('DOMContentLoaded', function () {
-    var el = document.getElementById('narrativeContent');
-    if (el && window.AURA_UI) AURA_UI.renderMarkdown(el);
-    else if (el && typeof marked !== 'undefined') {
-      const html = marked.parse(el.textContent || '');
-      el.innerHTML = (typeof DOMPurify !== 'undefined')
-      ? DOMPurify.sanitize(html)
-      : html;
-    }
+document.addEventListener('DOMContentLoaded', function () {
+  if (!window.marked || !window.DOMPurify) return;
+  document.querySelectorAll('.rec-narrative').forEach(function (el) {
+    if (el.dataset.rendered) return;
+    el.dataset.rendered = '1';
+    var raw = el.textContent.trim();
+    if (!raw) return;
+    el.innerHTML = DOMPurify.sanitize(marked.parse(raw));
   });
+});
 </script>
 {% endblock %}

@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.database import engine, Base, get_db
@@ -22,7 +22,8 @@ from app.models.user import User
 from app.models.event import Event
 from app.models.recommendation import Recommendation
 from app.models.user_profile import UserProfile
-from app.routers import auth, products, events, recommendations, admin
+from app.models.wishlist import WishlistItem
+from app.routers import auth, products, events, recommendations, admin, wishlist
 from app.scheduler.daily_digest import start_scheduler
 from app.services.product_service import list_products
 
@@ -204,6 +205,31 @@ def build_recently_viewed(db: Session, user_id: int, limit: int = 8) -> List[Dic
     return result
 
 
+# ============================================================
+# Signal counts — all-time totals of the meaningful behavioral
+# signals that drive the trigger engine and the recommendation
+# agent. One GROUP BY query, zero N+1, noise-filtered.
+# ============================================================
+SIGNAL_EVENT_TYPES = (
+    "course_view", "search", "course_click",
+    "wishlist", "syllabus_view", "faq_expand",
+)
+
+
+def build_signal_counts(db: Session, user_id: int) -> Dict[str, int]:
+    """All-time per-type counts of the meaningful behavioral signals."""
+    counts = {t: 0 for t in SIGNAL_EVENT_TYPES}
+    rows = (
+        db.query(Event.event_type, func.count(Event.id))
+        .filter(Event.user_id == user_id, Event.event_type.in_(SIGNAL_EVENT_TYPES))
+        .group_by(Event.event_type)
+        .all()
+    )
+    for etype, n in rows:
+        counts[etype] = n
+    return counts
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle: create tables, reindex, start scheduler."""
@@ -289,6 +315,7 @@ app.include_router(products.router)
 app.include_router(events.router)
 app.include_router(recommendations.router)
 app.include_router(admin.router)
+app.include_router(wishlist.router)
 
 
 # ============================================================
@@ -399,12 +426,25 @@ def page_course_detail(
     if not course:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
 
+    in_wishlist = False
+    if user:
+        in_wishlist = (
+            db.query(WishlistItem)
+            .filter(
+                WishlistItem.user_id == user.id,
+                WishlistItem.product_id == course.id,
+            )
+            .first()
+            is not None
+        )
+
     return templates.TemplateResponse(
         "pages/course_detail.html",
         {
             "request": request,
             "user": user,
             "course": course,
+            "in_wishlist": in_wishlist,
         },
     )
 
@@ -434,6 +474,33 @@ def page_about(
             "request": request,
             "user": user,
         },
+    )
+
+
+@app.get("/wishlist", response_class=HTMLResponse)
+def page_wishlist(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional),
+):
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+
+    items = (
+        db.query(WishlistItem)
+        .filter(WishlistItem.user_id == user.id)
+        .order_by(WishlistItem.created_at.desc())
+        .all()
+    )
+    courses = []
+    for it in items:
+        p = db.query(Product).filter(Product.id == it.product_id).first()
+        if p:
+            courses.append(p)
+
+    return templates.TemplateResponse(
+        "pages/wishlist.html",
+        {"request": request, "user": user, "courses": courses},
     )
 
 
@@ -477,6 +544,7 @@ def page_profile(
             "user_profile": user_profile,
             "recent_events": recent_events,
             "stats": build_user_stats(db, user.id),
+            "signals": build_signal_counts(db, user.id),
         },
     )
 

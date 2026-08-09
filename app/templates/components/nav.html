@@ -9,6 +9,14 @@
     </a>
 
     <ul class="nav-links">
+      {% if user %}
+      <li>
+        <a href="/dashboard"
+           class="{% if request.url.path.startswith('/dashboard') %}active{% endif %}">
+          Dashboard
+        </a>
+      </li>
+      {% endif %}
       <li>
         <a href="/catalog"
            class="{% if request.url.path.startswith('/catalog') or request.url.path.startswith('/course') %}active{% endif %}">
@@ -27,26 +35,21 @@
           Paths
         </a>
       </li>
-      <li>
-        <a href="/about"
-           class="{% if request.url.path.startswith('/about') %}active{% endif %}">
-          How it works
-        </a>
-      </li>
       {% if user %}
-      <li>
-        <a href="/dashboard"
-           class="{% if request.url.path.startswith('/dashboard') %}active{% endif %}">
-          Dashboard
-        </a>
-      </li>
       <li>
         <a href="/profile"
            class="{% if request.url.path.startswith('/profile') %}active{% endif %}">
           Profile
         </a>
       </li>
+      <li>
+        <a href="/wishlist"
+           class="{% if request.url.path.startswith('/wishlist') %}active{% endif %}">
+          Wishlist
+        </a>
+      </li>
       {% endif %}
+
       {% if user and user.is_admin %}
       <li>
         <a href="/admin/dashboard"
@@ -55,6 +58,12 @@
         </a>
       </li>
       {% endif %}
+      <li>
+        <a href="/about"
+           class="{% if request.url.path.startswith('/about') %}active{% endif %}">
+          How it works
+        </a>
+      </li>
     </ul>
 
     <div class="nav-actions">

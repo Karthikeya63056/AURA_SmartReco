@@ -4,6 +4,7 @@ from app.models.product import Product
 from app.models.event import Event
 from app.models.recommendation import Recommendation
 from app.models.user_profile import UserProfile
+from app.models.wishlist import WishlistItem
 
 __all__ = [
     "Base",

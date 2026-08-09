@@ -1,83 +1,133 @@
 {% extends "base.html" %}
-{% block title %}How AURA Works{% endblock %}
+{% block title %}How it works{% endblock %}
 
 {% block content %}
 <section class="section about-page fade-in">
-  <div class="about-intro">
-    <div class="hero-badge" style="margin-bottom:20px;">Powered by Mesh API · LangGraph</div>
-    <h1 class="section-title" style="font-size: clamp(2.2rem, 4.5vw, 3rem); margin-bottom:16px;">
-      How AURA Works
-    </h1>
-    <p>
-      AURA is not a simple related-products widget. It is an agentic system that
-      continuously observes your behavior, reasons over it, and generates
-      personalized course recommendations grounded in the real catalog.
+
+  <!-- ============ HERO ============ -->
+  <div class="about-hero">
+    <div class="hero-badge">Powered by Mesh API · LangGraph</div>
+    <h1>How AURA Works</h1>
+    <p class="about-sub">
+      Not a related-products widget. An agentic system that watches how you learn,
+      reasons about it, and recommends real courses — with a story about why they matter.
     </p>
   </div>
 
-  <div class="about-loop">
-    <div class="section-header">
-      <h2 class="section-title">The Agent Loop</h2>
-    </div>
-    <div class="steps stagger">
-      <div class="step-card fade-in">
-        <div class="step-num">01</div>
+  <!-- ============ THE AGENT LOOP ============ -->
+  <div class="about-block">
+    <h2 class="section-title">The agent loop</h2>
+    <p class="about-block-sub">Six stages, one compiled LangGraph state machine. Every recommendation passes through all of them.</p>
+
+    <div class="loop-grid">
+      <div class="loop-card">
+        <span class="step-num">01</span>
         <h3>Observe</h3>
-        <p>
-          Page views, searches, clicks, and time spent are tracked in a non-blocking
-          way and stored as behavioral events.
-        </p>
+        <p>Views, searches, clicks, wishlists, syllabus opens and dwell time are batched in your browser and flushed without ever blocking the page.</p>
       </div>
-      <div class="step-card fade-in">
-        <div class="step-num">02</div>
+      <div class="loop-card">
+        <span class="step-num">02</span>
         <h3>Understand</h3>
-        <p>
-          The LangGraph agent infers interests, skill level, and intent, then builds
-          a living profile that updates as you explore.
-        </p>
+        <p>A Mesh-LLM node reads your recent activity and infers interests, skill level and intent — a living profile that updates as you explore.</p>
       </div>
-      <div class="step-card fade-in">
-        <div class="step-num">03</div>
+      <div class="loop-card">
+        <span class="step-num">03</span>
         <h3>Retrieve</h3>
-        <p>
-          Semantic search over the vector catalog returns grounded candidates —
-          not invented courses.
-        </p>
+        <p>Your intent becomes a semantic query over the vector catalog. Prerequisite-aware filtering keeps candidates realistic — nothing is invented.</p>
+      </div>
+      <div class="loop-card">
+        <span class="step-num">04</span>
+        <h3>Evaluate</h3>
+        <p>A second reasoning pass scores candidates 0–100 and reranks them. Below 60, the agent broadens the search and retrieves again — up to two refetches.</p>
+      </div>
+      <div class="loop-card">
+        <span class="step-num">05</span>
+        <h3>Persuade</h3>
+        <p>An AIDA-style narrative is written for your cognitive style — analytical, social, motivational or practical — explaining why these courses, now.</p>
+      </div>
+      <div class="loop-card">
+        <span class="step-num">06</span>
+        <h3>Critique &amp; store</h3>
+        <p>A validator checks length and grounding; if the story doesn't name your courses, it's rewritten. The result is stored and served to your dashboard.</p>
       </div>
     </div>
   </div>
 
-  <div class="section-header">
-    <h2 class="section-title">Why it feels personal</h2>
-  </div>
-  <div class="course-grid stagger" style="margin-bottom:64px;">
-    <div class="step-card fade-in">
-      <div class="step-num">Triggers</div>
-      <h3>Smart when to call AI</h3>
-      <p>High-intent actions, search bursts, staleness, and cooldowns avoid wasteful LLM calls on every click.</p>
-    </div>
-    <div class="step-card fade-in">
-      <div class="step-num">Dual-write</div>
-      <h3>Catalog stays searchable</h3>
-      <p>Every product is written to SQL and the vector store together so recommendations stay in sync.</p>
-    </div>
-    <div class="step-card fade-in">
-      <div class="step-num">Persuasion</div>
-      <h3>Narrative, not a bare list</h3>
-      <p>A short AIDA-style story explains why these courses fit your journey, then links the products.</p>
+  <!-- ============ CONCRETE EXAMPLE ============ -->
+  <div class="about-block">
+    <h2 class="section-title">What that looks like in practice</h2>
+    <p class="about-block-sub">One real session, end to end.</p>
+
+    <div class="example-panel">
+      <div class="example-col">
+        <h4>You did</h4>
+        <ul>
+          <li>Searched “LangGraph” twice</li>
+          <li>Opened two agentic-AI courses</li>
+          <li>Viewed a syllabus · wishlisted one</li>
+        </ul>
+      </div>
+      <div class="example-col">
+        <h4>AURA inferred</h4>
+        <ul>
+          <li>Interests: Agentic AI · LangGraph</li>
+          <li>Skill: Intermediate · Intent: Upskilling</li>
+          <li>Style: practical · Trigger: high-intent</li>
+        </ul>
+      </div>
+      <div class="example-col">
+        <h4>You got</h4>
+        <ul>
+          <li>A narrative quoting your wishlist &amp; searches</li>
+          <li>3 grounded courses, prerequisites checked</li>
+          <li>Quality score 87 · stored &amp; cached</li>
+        </ul>
+      </div>
     </div>
   </div>
 
+  <!-- ============ WHY IT FEELS PERSONAL ============ -->
+  <div class="about-block">
+    <h2 class="section-title">Why it feels personal</h2>
+    <p class="about-block-sub">Four design decisions that separate this from a popularity list.</p>
+
+    <div class="why-grid">
+      <div class="step-card">
+        <span class="step-num">Triggers</span>
+        <h3>Smart about when to think</h3>
+        <p>The agent runs only when behavior actually changes — high-intent actions, search bursts, staleness — behind a 10-minute cooldown. No LLM call per click.</p>
+      </div>
+      <div class="step-card">
+        <span class="step-num">Grounding</span>
+        <h3>Real catalog, real order</h3>
+        <p>Dual-write keeps SQL and the vector store in sync, and prerequisite-aware reranking means you're never sold a course you can't take yet.</p>
+      </div>
+      <div class="step-card">
+        <span class="step-num">Persuasion</span>
+        <h3>The same course, argued your way</h3>
+        <p>ROI and depth for analytical readers, community for social learners, momentum for motivators — the framing adapts, not just the list.</p>
+      </div>
+      <div class="step-card">
+        <span class="step-num">Memory</span>
+        <h3>It remembers, and follows up</h3>
+        <p>Your profile persists across sessions, and a 9:00 AM digest can recap yesterday's interests with a fresh narrative while you're away.</p>
+      </div>
+    </div>
+
+    <p class="about-privacy">AURA only uses your on-platform activity. Nothing external, ever.</p>
+  </div>
+
+  <!-- ============ CTA ============ -->
   <div class="landing-cta-band">
     <div class="rec-side-card">
-      <h2 class="section-title" style="margin-bottom:12px;">See it on your dashboard</h2>
-      <p class="text-muted" style="margin-bottom:24px;">
-        Sign in, explore a few courses, then refresh recommendations.
-      </p>
-      <a href="{% if user %}/dashboard{% else %}/register{% endif %}" class="btn btn-cyan btn-lg">
-        {% if user %}Open Dashboard{% else %}Get Started{% endif %}
-      </a>
+      <h2>See it on your dashboard</h2>
+      <p>Sign in, explore a few courses, then refresh recommendations.</p>
+      <div class="hero-actions" style="justify-content:center;">
+        <a href="/dashboard" class="btn btn-cyan">Open Dashboard</a>
+        <a href="/catalog" class="btn btn-outline">Browse Catalog</a>
+      </div>
     </div>
   </div>
+
 </section>
 {% endblock %}

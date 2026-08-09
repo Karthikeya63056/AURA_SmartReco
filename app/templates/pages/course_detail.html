@@ -55,13 +55,16 @@
             data-course-title="{{ course.title }}">
       Enroll Preview
     </button>
+    <!-- State-aware wishlist button: uses in_wishlist from route context.
+         The JS handles the API call and tracks wishlist/wishlist_remove events
+         based on the response, so no data-track-action here (avoids double-fire). -->
     <button type="button"
-            class="btn btn-outline btn-lg"
-            id="wishlistBtn"
-            data-track-action="wishlist"
+            class="btn {{ 'btn-cyan' if in_wishlist else 'btn-outline' }} btn-lg"
+            id="interestBtn"
+            data-saved="{{ '1' if in_wishlist else '0' }}"
             data-course-id="{{ course.id }}"
             data-course-title="{{ course.title }}">
-      Save
+      {{ 'Saved to wishlist ✓' if in_wishlist else 'Save to wishlist' }}
     </button>
     <button type="button"
             class="btn btn-outline btn-lg"

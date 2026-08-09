@@ -18,6 +18,7 @@ ALLOWED_EVENT_TYPES = {
     "course_impression",
     "rec_click",
     "rec_dismiss",
+    "wishlist_remove",
     # High-value intent / exploration signals (Phase 1 frontend)
     "faq_expand",
     "instructor_view",

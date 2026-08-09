@@ -1,4 +1,47 @@
+{#
+  Expects: user (optional User)
+  Included from base.html on every page.
+#}
 <footer class="footer">
-  <div class="footer-logo">AURA</div>
-  <div class="footer-copy">SmartReco 2026 · Mesh API · LangGraph</div>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <a href="/" class="nav-logo">AURA <span>TM</span></a>
+      <p class="footer-tagline">The agentic mentor that learns how you learn — and recommends what matters next.</p>
+      <p class="footer-note">Recommendations adapt from your on-platform activity.</p>
+    </div>
+
+    <div class="footer-col">
+      <h4>Explore</h4>
+      <a href="/catalog">Courses</a>
+      <a href="/search">Search</a>
+      <a href="/paths">Learning Paths</a>
+      <a href="/about">How it works</a>
+    </div>
+
+    <div class="footer-col">
+      <h4>Your space</h4>
+      {% if user %}
+      <a href="/dashboard">Dashboard</a>
+      <a href="/profile">Profile</a>
+      {% if user.is_admin %}
+      <a href="/admin/dashboard">Admin console</a>
+      {% endif %}
+      {% else %}
+      <a href="/login">Sign in</a>
+      <a href="/register">Create account</a>
+      {% endif %}
+    </div>
+
+    <div class="footer-col">
+      <h4>Project</h4>
+      <a href="https://github.com/Karthikeya63056/AURA_SmartReco" target="_blank" rel="noopener">GitHub repository</a>
+      <a href="/docs" target="_blank" rel="noopener">API docs (Swagger)</a>
+      <a href="mailto:karthikeya63056@gmail.com">Contact &amp; feedback</a>
+    </div>
+  </div>
+
+  <div class="footer-bottom">
+    <span>© 2026 AURA SmartReco · Built for the SmartReco Build Challenge</span>
+    <span class="footer-stack">FastAPI · LangGraph · ChromaDB · SQLite · Mesh API</span>
+  </div>
 </footer>
