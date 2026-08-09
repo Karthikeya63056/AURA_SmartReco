@@ -1,6 +1,6 @@
 {#
   Expects: recommendation dict with:
-    narrative, product_ids (list), quality_score?, trigger_reason?, id?
+    narrative, product_ids (list), product_reasons (list), quality_score?, trigger_reason?, id?
   Optional:
     show_chips (default true)
     empty_message (string)
@@ -37,24 +37,52 @@
   </div>
 
   {% if show_chips and recommendation and recommendation.product_ids %}
-  <div class="rec-chips">
-    {% set reasons = recommendation.product_reasons if recommendation.product_reasons is defined else [] %}
-    {% for pid in recommendation.product_ids[:4] %}
-      <div class="rec-chip-group">
-        <a href="/course/{{ pid }}" class="rec-chip"
+  {% set reasons = recommendation.product_reasons if recommendation.product_reasons is defined else [] %}
+  {% set pids = recommendation.product_ids[:4] %}
+
+  <div class="rec-courses">
+    {# ── Primary recommendation (first one) ── #}
+    {% if pids|length > 0 %}
+    <div class="rec-primary">
+      <a href="/course/{{ pids[0] }}"
+         class="rec-primary-btn"
+         data-recommendation-id="{{ rec_id }}"
+         data-product-id="{{ pids[0] }}"
+         onclick="handleRecommendationClick(this)">
+        View course
+        <span class="arrow">→</span>
+      </a>
+      {% if reasons and reasons|length > 0 and reasons[0] %}
+        <span class="rec-reason-chip primary-reason">{{ reasons[0] }}</span>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# ── Secondary recommendations ── #}
+    {% if pids|length > 1 %}
+    <div class="rec-secondary-row">
+      {% for pid in pids[1:] %}
+      <div class="rec-secondary">
+        <a href="/course/{{ pid }}"
+           class="rec-secondary-btn"
            data-recommendation-id="{{ rec_id }}"
            data-product-id="{{ pid }}"
-           onclick="handleRecommendationClick(this)">View course</a>
-        {% if reasons and loop.index0 < reasons|length and reasons[loop.index0] %}
-          <span class="rec-reason-chip">{{ reasons[loop.index0] }}</span>
+           onclick="handleRecommendationClick(this)">
+          View course
+        </a>
+        {% set idx = loop.index0 + 1 %}
+        {% if reasons and idx < reasons|length and reasons[idx] %}
+          <span class="rec-reason-chip">{{ reasons[idx] }}</span>
         {% endif %}
       </div>
-    {% endfor %}
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 
   {% if recommendation and (recommendation.quality_score is defined or recommendation.trigger_reason is defined) %}
-  <div class="rec-status-badges" style="margin-top:16px; display:flex; flex-wrap:wrap; gap:8px;">
+  <div class="rec-status-badges">
     {% if recommendation.quality_score is defined and recommendation.quality_score is not none %}
       <span class="badge badge-cyan">score {{ recommendation.quality_score }}</span>
     {% endif %}
@@ -72,7 +100,6 @@ function handleRecommendationClick(el) {
   if (window.trackRecommendationClick) {
     window.trackRecommendationClick(recId, prodId);
   }
-  // Let the default <a> navigation proceed
 }
 
 function handleRecommendationDismiss(el) {
@@ -80,7 +107,6 @@ function handleRecommendationDismiss(el) {
   if (window.trackRecommendationDismiss) {
     window.trackRecommendationDismiss(recId);
   }
-  // Fade out the card
   var card = el.closest('.rec-side-card');
   if (card) {
     card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';

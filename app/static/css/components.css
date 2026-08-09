@@ -517,6 +517,133 @@
   border-color: rgba(239, 68, 68, 0.3);
 }
 
+/* ============================================================
+   NEW COMPACT RECOMMENDATION COURSES LAYOUT
+   (Primary + Secondary cards)
+   ============================================================ */
+
+.rec-courses {
+  margin-top: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Primary recommendation (first course) */
+.rec-primary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: rgba(34, 211, 238, 0.06);
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 14px;
+}
+
+.rec-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 18px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: var(--cyan);
+  color: #0a0a0c;
+  transition: all 0.2s ease;
+}
+
+.rec-primary-btn:hover {
+  background: #67e8f9;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(34, 211, 238, 0.25);
+}
+
+.rec-primary-btn .arrow {
+  font-size: 1rem;
+  transition: transform 0.2s ease;
+}
+
+.rec-primary-btn:hover .arrow {
+  transform: translateX(3px);
+}
+
+/* Secondary recommendations row */
+.rec-secondary-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.rec-secondary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.rec-secondary:hover {
+  border-color: rgba(34, 211, 238, 0.25);
+  background: rgba(34, 211, 238, 0.04);
+}
+
+.rec-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  color: var(--cyan);
+  transition: all 0.2s ease;
+}
+
+.rec-secondary-btn:hover {
+  background: rgba(34, 211, 238, 0.12);
+  border-color: var(--cyan);
+}
+
+/* Reason chips */
+.rec-reason-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--text-muted, #94a3b8);
+  background: rgba(34, 211, 238, 0.06);
+  border: 1px solid rgba(34, 211, 238, 0.12);
+  line-height: 1.4;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rec-reason-chip.primary-reason {
+  background: rgba(34, 211, 238, 0.1);
+  border-color: rgba(34, 211, 238, 0.22);
+  color: #a5f3fc;
+}
+
+/* Status badges (score + trigger) */
+.rec-status-badges {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Legacy support (old structure still works if needed) */
 .rec-chips {
   display: flex;
   flex-wrap: wrap;
@@ -549,22 +676,6 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
-}
-
-.rec-reason-chip {
-  display: inline-block;
-  padding: 2px 10px;
-  border-radius: var(--radius-full);
-  font-size: 0.68rem;
-  font-weight: 400;
-  color: var(--text-muted, #94a3b8);
-  background: rgba(34, 211, 238, 0.06);
-  border: 1px solid rgba(34, 211, 238, 0.12);
-  line-height: 1.5;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ---------- STEP / FEATURE CARDS ---------- */
@@ -1139,7 +1250,7 @@
 .detail .skill-list,
 .detail .prereq-list,
 .detail .detail-meta-item .label {
-  color: #d4d4dc !important;   /* was ~#8b8b96 — clearer body */
+  color: #d4d4dc !important;
   font-weight: 450;
   line-height: 1.7;
 }
