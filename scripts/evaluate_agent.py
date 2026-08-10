@@ -1,14 +1,18 @@
 #!/usr/bin/env python
 """
-AURA SmartReco — Synthetic Evaluation Framework (v2)
+AURA SmartReco — Synthetic Evaluation Framework (v3)
 
-Evaluates the full LangGraph agent against 8 realistic personas.
-Measures:
-  - Precision@5 / Recall@5 (against curated ground-truth titles)
-  - Narrative Relevance (LLM-as-Judge)
-  - Agent quality_score, refetch count, critique status, reasons
+Evaluates the full LangGraph agent against 9 realistic personas.
+Measures 7 dimensions:
+  1. Precision@5 / Recall@5 (against curated ground-truth titles)
+  2. Narrative Relevance (LLM-as-Judge)
+  3. Personalization Divergence (Jaccard distance between persona recs)
+  4. Persuasion Routing (different styles for different personas)
+  5. Grounding Rate (narrative mentions real courses)
+  6. Self-Correction Stats (refetch + critique retry counts)
+  7. Cold-Start Resilience (zero-event user gets valid rec)
 
-Outputs a rich evaluation_report.json + console summary.
+Outputs evaluation_report.json + rich console summary.
 """
 
 from __future__ import annotations
@@ -17,9 +21,11 @@ import asyncio
 import argparse
 import json
 import logging
+import re
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from itertools import combinations
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -46,7 +52,7 @@ logging.basicConfig(
 logger = logging.getLogger("evaluate_agent")
 
 # ---------------------------------------------------------------------------
-# Personas (8 realistic learners)
+# Personas (9 realistic learners, including cold-start)
 # ---------------------------------------------------------------------------
 PERSONAS: List[Dict[str, Any]] = [
     {
@@ -57,7 +63,7 @@ PERSONAS: List[Dict[str, Any]] = [
             "intent": "Upskilling",
         },
         "events": [
-            {"event_type": "search", "payload": {"query": "LangGraph multi-agent state graph architecture"}},
+            {"event_type": "search", "payload": {"query": "LangGraph multi-agent state graph architectures"}},
             {"event_type": "search", "payload": {"query": "autonomous AI agents tools refetch"}},
             {"event_type": "syllabus_view", "payload": {"course_id": 1}},
             {"event_type": "course_click", "payload": {"course_id": 10}},
@@ -209,6 +215,16 @@ PERSONAS: List[Dict[str, Any]] = [
             "Async Python Programming & High-Performance AsyncIO",
         ],
     },
+    {
+        "name": "Cold-Start User (Zero Events)",
+        "profile": {
+            "interests": [],
+            "skill_level": "Unknown",
+            "intent": "Exploration",
+        },
+        "events": [],  # No events — tests cold-start fallback
+        "ground_truth": [],  # No ground truth — just needs to not crash
+    },
 ]
 
 
@@ -262,11 +278,7 @@ def titles_from_ids(db, product_ids: List[int]) -> List[str]:
     """Resolve product_ids → titles (order preserved)."""
     if not product_ids:
         return []
-    products = (
-        db.query(Product)
-        .filter(Product.id.in_(product_ids))
-        .all()
-    )
+    products = db.query(Product).filter(Product.id.in_(product_ids)).all()
     id_to_title = {p.id: p.title for p in products}
     return [id_to_title.get(pid, f"[missing id={pid}]") for pid in product_ids]
 
@@ -284,6 +296,83 @@ def compute_precision_recall(
     precision = hits / len(rec_set) if rec_set else 0.0
     recall = hits / len(gt_set) if gt_set else 0.0
     return round(precision, 4), round(recall, 4)
+
+
+def jaccard_distance(set_a: set, set_b: set) -> float:
+    """Jaccard distance = 1 - (intersection / union). 1.0 = completely different."""
+    if not set_a and not set_b:
+        return 0.0
+    union = set_a | set_b
+    if not union:
+        return 0.0
+    intersection = set_a & set_b
+    return round(1.0 - (len(intersection) / len(union)), 4)
+
+
+def compute_personalization_divergence(results: List[Dict[str, Any]]) -> float:
+    """
+    Average pairwise Jaccard distance between all persona recommendation sets.
+    Higher = more personalized (different personas get different recs).
+    """
+    triggered = [r for r in results if r.get("triggered") and r.get("recommended_titles")]
+    if len(triggered) < 2:
+        return 0.0
+
+    distances = []
+    for r1, r2 in combinations(triggered, 2):
+        set1 = {t.strip().lower() for t in r1["recommended_titles"][:5]}
+        set2 = {t.strip().lower() for t in r2["recommended_titles"][:5]}
+        distances.append(jaccard_distance(set1, set2))
+
+    return round(sum(distances) / len(distances), 4) if distances else 0.0
+
+
+def detect_persuasion_style(narrative: str) -> str:
+    """
+    Heuristic persuasion style detection from narrative text.
+    Returns: analytical, motivational, social, practical, or hybrid.
+    """
+    if not narrative:
+        return "unknown"
+
+    text = narrative.lower()
+
+    # Keyword patterns for each style
+    analytical_keywords = ["data", "metrics", "evidence", "research", "study", "analysis"]
+    motivational_keywords = ["achieve", "goal", "dream", "potential", "success", "growth"]
+    social_keywords = ["community", "peers", "together", "collaborate", "network"]
+    practical_keywords = ["hands-on", "project", "build", "implement", "real-world"]
+
+    scores = {
+        "analytical": sum(1 for k in analytical_keywords if k in text),
+        "motivational": sum(1 for k in motivational_keywords if k in text),
+        "social": sum(1 for k in social_keywords if k in text),
+        "practical": sum(1 for k in practical_keywords if k in text),
+    }
+
+    max_score = max(scores.values())
+    if max_score == 0:
+        return "hybrid"
+
+    top_styles = [style for style, score in scores.items() if score == max_score]
+    return top_styles[0] if len(top_styles) == 1 else "hybrid"
+
+
+def compute_grounding_rate(narrative: str, recommended_titles: List[str]) -> float:
+    """
+    Check if narrative mentions at least one recommended course title.
+    Returns 1.0 if grounded, 0.0 if not.
+    """
+    if not narrative or not recommended_titles:
+        return 0.0
+
+    narrative_lower = narrative.lower()
+    for title in recommended_titles:
+        # Check if course title (or key words) appears in narrative
+        title_words = [w.lower() for w in title.split() if len(w) > 3]
+        if any(word in narrative_lower for word in title_words[:3]):
+            return 1.0
+    return 0.0
 
 
 def score_narrative_llm_judge(narrative: str, persona: dict) -> float:
@@ -338,7 +427,7 @@ Return ONLY valid JSON:
 # Main evaluation loop
 # ---------------------------------------------------------------------------
 def run_evaluation(quick: bool = False) -> Dict[str, Any]:
-    logger.info("Starting AURA SmartReco Synthetic Evaluation Framework (v2)...")
+    logger.info("Starting AURA SmartReco Synthetic Evaluation Framework (v3)...")
     db = SessionLocal()
     results: List[Dict[str, Any]] = []
 
@@ -370,6 +459,10 @@ def run_evaluation(quick: bool = False) -> Dict[str, Any]:
                         "precision": 0.0,
                         "recall": 0.0,
                         "narrative_score": 0.0,
+                        "grounding_rate": 0.0,
+                        "persuasion_style": "unknown",
+                        "refetch_count": 0,
+                        "critique_retry_count": 0,
                         "recommended_titles": [],
                         "recommended_ids": [],
                         "ground_truth": persona["ground_truth"],
@@ -400,6 +493,10 @@ def run_evaluation(quick: bool = False) -> Dict[str, Any]:
                         "precision": 0.0,
                         "recall": 0.0,
                         "narrative_score": 0.0,
+                        "grounding_rate": 0.0,
+                        "persuasion_style": "unknown",
+                        "refetch_count": 0,
+                        "critique_retry_count": 0,
                         "recommended_titles": [],
                         "recommended_ids": [],
                         "ground_truth": persona["ground_truth"],
@@ -413,11 +510,13 @@ def run_evaluation(quick: bool = False) -> Dict[str, Any]:
             narrative: str = rec_result.get("narrative") or ""
             quality_score = rec_result.get("quality_score", 0)
             product_reasons = rec_result.get("product_reasons") or []
+            metadata = rec_result.get("metadata") or {}
+            refetch_count = metadata.get("refetch_count", 0)
+            critique_retry_count = metadata.get("critique_retry_count", 0)
 
             # 5. Also try the active recommendation as a second source of truth
             active = RecommendationService.get_active(db, user.id)
             if active and active.get("product_ids"):
-                # Prefer the DB view if it has more complete data
                 product_ids = active.get("product_ids") or product_ids
                 if not narrative:
                     narrative = active.get("narrative") or ""
@@ -432,18 +531,24 @@ def run_evaluation(quick: bool = False) -> Dict[str, Any]:
                 recommended_titles, persona["ground_truth"]
             )
             narrative_score = 0.75 if quick else score_narrative_llm_judge(narrative, persona)
+            grounding_rate = compute_grounding_rate(narrative, recommended_titles)
+            persuasion_style = detect_persuasion_style(narrative)
 
             duration = round(time.perf_counter() - t0, 2)
 
-            logger.info(f"  📊 Quality score     : {quality_score}")
-            logger.info(f"  📊 Precision@5       : {precision:.2%}")
-            logger.info(f"  📊 Recall@5          : {recall:.2%}")
-            logger.info(f"  📊 Narrative score   : {narrative_score:.2%}")
-            logger.info(f"  📊 Duration          : {duration}s")
-            logger.info(f"  Recommended IDs      : {product_ids}")
-            logger.info(f"  Recommended titles   : {recommended_titles}")
+            logger.info(f"  📊 Quality score       : {quality_score}")
+            logger.info(f"  📊 Precision@5         : {precision:.2%}")
+            logger.info(f"  📊 Recall@5            : {recall:.2%}")
+            logger.info(f"  📊 Narrative score     : {narrative_score:.2%}")
+            logger.info(f"  📊 Grounding rate      : {grounding_rate:.2%}")
+            logger.info(f"  📊 Persuasion style    : {persuasion_style}")
+            logger.info(f"  📊 Refetch count       : {refetch_count}")
+            logger.info(f"  📊 Critique retries    : {critique_retry_count}")
+            logger.info(f"  📊 Duration            : {duration}s")
+            logger.info(f"  Recommended IDs        : {product_ids}")
+            logger.info(f"  Recommended titles     : {recommended_titles}")
             if product_reasons:
-                logger.info(f"  Reasons              : {product_reasons}")
+                logger.info(f"  Reasons                : {product_reasons}")
 
             results.append(
                 {
@@ -454,6 +559,10 @@ def run_evaluation(quick: bool = False) -> Dict[str, Any]:
                     "precision": precision,
                     "recall": recall,
                     "narrative_score": narrative_score,
+                    "grounding_rate": grounding_rate,
+                    "persuasion_style": persuasion_style,
+                    "refetch_count": refetch_count,
+                    "critique_retry_count": critique_retry_count,
                     "recommended_ids": product_ids,
                     "recommended_titles": recommended_titles,
                     "product_reasons": product_reasons,
@@ -472,12 +581,31 @@ def run_evaluation(quick: bool = False) -> Dict[str, Any]:
             avg_precision = round(sum(r["precision"] for r in triggered) / n, 4)
             avg_recall = round(sum(r["recall"] for r in triggered) / n, 4)
             avg_narrative = round(sum(r["narrative_score"] for r in triggered) / n, 4)
+            avg_grounding = round(sum(r["grounding_rate"] for r in triggered) / n, 4)
             avg_duration = round(sum(r["duration_sec"] for r in triggered) / n, 2)
+            total_refetches = sum(r["refetch_count"] for r in triggered)
+            total_critique_retries = sum(r["critique_retry_count"] for r in triggered)
+
+            # Personalization divergence
+            divergence = compute_personalization_divergence(results)
+
+            # Persuasion style distribution
+            persuasion_styles = [r["persuasion_style"] for r in triggered if r.get("persuasion_style")]
+            style_counts = {style: persuasion_styles.count(style) for style in set(persuasion_styles)}
+
             overall = round(
-                (avg_precision * 0.35) + (avg_recall * 0.35) + (avg_narrative * 0.30), 4
+                (avg_precision * 0.25)
+                + (avg_recall * 0.25)
+                + (avg_narrative * 0.20)
+                + (avg_grounding * 0.15)
+                + (divergence * 0.15),
+                4,
             )
         else:
-            avg_precision = avg_recall = avg_narrative = overall = avg_duration = 0.0
+            avg_precision = avg_recall = avg_narrative = avg_grounding = overall = avg_duration = 0.0
+            divergence = 0.0
+            total_refetches = total_critique_retries = 0
+            style_counts = {}
 
         report = {
             "timestamp": utcnow().isoformat(),
@@ -487,7 +615,12 @@ def run_evaluation(quick: bool = False) -> Dict[str, Any]:
                 "precision_at_5": avg_precision,
                 "recall_at_5": avg_recall,
                 "narrative_relevance_score": avg_narrative,
+                "grounding_rate": avg_grounding,
+                "personalization_divergence": divergence,
                 "avg_duration_sec": avg_duration,
+                "total_refetches": total_refetches,
+                "total_critique_retries": total_critique_retries,
+                "persuasion_style_distribution": style_counts,
                 "overall_score": overall,
             },
             "persona_results": results,
@@ -497,13 +630,29 @@ def run_evaluation(quick: bool = False) -> Dict[str, Any]:
         print("\n" + "=" * 70)
         print("📊 AURA SMARTRECO 2026 — SYNTHETIC EVALUATION REPORT")
         print("=" * 70)
-        print(f"Total Personas          : {len(PERSONAS)}")
-        print(f"Agent Trigger Rate      : {n}/{len(PERSONAS)} ({n / len(PERSONAS):.0%})")
-        print(f"Precision@5             : {avg_precision:.2%}")
-        print(f"Recall@5                : {avg_recall:.2%}")
-        print(f"Narrative Quality (LLM) : {avg_narrative:.2%}")
-        print(f"Avg Latency per persona : {avg_duration}s")
-        print(f"⭐ Overall System Score  : {overall:.2%}  ({overall * 10:.1f}/10)")
+        print(f"Total Personas            : {len(PERSONAS)}")
+        print(f"Agent Trigger Rate        : {n}/{len(PERSONAS)} ({n / len(PERSONAS):.0%})")
+        print()
+        print("🎯 Retrieval Quality")
+        print(f"  Precision@5             : {avg_precision:.2%}")
+        print(f"  Recall@5                : {avg_recall:.2%}")
+        print()
+        print("✍️  Narrative Quality")
+        print(f"  LLM Judge Score         : {avg_narrative:.2%}")
+        print(f"  Grounding Rate          : {avg_grounding:.2%}")
+        print(f"  Persuasion Styles       : {style_counts}")
+        print()
+        print("🔄 Self-Correction")
+        print(f"  Total Refetches         : {total_refetches}")
+        print(f"  Total Critique Retries  : {total_critique_retries}")
+        print()
+        print("🎨 Personalization")
+        print(f"  Divergence (Jaccard)    : {divergence:.2%} (higher = more personalized)")
+        print()
+        print("⚡ Performance")
+        print(f"  Avg Latency per persona : {avg_duration}s")
+        print()
+        print(f"⭐ Overall System Score   : {overall:.2%}  ({overall * 10:.1f}/10)")
         print("=" * 70 + "\n")
 
         # Persist

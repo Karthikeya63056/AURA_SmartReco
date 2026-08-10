@@ -1,6 +1,6 @@
 import logging
-import secrets
 import time
+from datetime import timedelta
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
@@ -15,7 +15,6 @@ from app.core.security import (
     create_access_token,
     decode_access_token,
     get_password_hash,
-    verify_password,
 )
 from app.dependencies import ACCESS_TOKEN_COOKIE, get_current_user, get_current_user_optional
 from app.models.user import User
@@ -72,32 +71,22 @@ def _clear_access_cookie(response: Response) -> None:
 
 
 def _create_reset_token(user_id: int) -> str:
-    """Create a short-lived JWT reset token (15 min TTL)."""
-    from datetime import datetime, timedelta, timezone
+    """Create a 15-minute password-reset token.
 
-    expires = datetime.now(timezone.utc) + timedelta(minutes=15)
-    payload = {
-        "sub": f"reset:{user_id}",
-        "exp": expires,
-        "jti": secrets.token_urlsafe(16),  # unique per issuance
-    }
-    # Reuse the same signing utility with a different subject prefix
-    import jwt
-
-    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    Reuses the project's python-jose signer with a namespaced subject
+    ("reset:<id>") so it can NEVER double as a login session token —
+    dependencies._user_from_token expects a plain integer subject.
+    """
+    return create_access_token(
+        subject=f"reset:{user_id}",
+        expires_delta=timedelta(minutes=15),
+    )
 
 
 def _verify_reset_token(token: str) -> int:
-    """Verify a reset token and return the user ID, or raise."""
-    import jwt
-
-    try:
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET,
-            algorithms=[settings.JWT_ALGORITHM],
-        )
-    except jwt.PyJWTError:
+    """Verify a reset token and return the user ID, or raise 400."""
+    payload = decode_access_token(token)
+    if not payload:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired reset link.",
