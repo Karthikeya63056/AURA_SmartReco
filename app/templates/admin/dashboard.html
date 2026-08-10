@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Admin · Dashboard{% endblock %}
+{% block title %}Admin Dashboard{% endblock %}
 
 {% block content %}
 <section class="admin-page fade-in">
@@ -45,6 +45,23 @@
         <span class="text-cyan text-sm">Open →</span>
       </div>
     </a>
+
+      <button type="button"
+            id="runDigestBtn"
+            class="course-card fade-in"
+            style="text-align:left; width:100%;">
+      <div class="course-meta">
+        <span class="badge badge-success">Scheduler</span>
+      </div>
+      <div class="course-title">Run Daily Digest Now</div>
+      <div class="course-desc">
+        Trigger the daily recommendation email digest immediately for all active users. Normally runs at 09:00.
+      </div>
+      <div class="course-footer">
+        <span class="course-level">Proactive Delivery</span>
+        <span class="text-cyan text-sm">Run →</span>
+      </div>
+    </button>
 
     <a href="/catalog" class="course-card fade-in">
       <div class="course-meta">
@@ -153,4 +170,56 @@
   </div>
   {% endif %}
 </section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const btn = document.getElementById('runDigestBtn');
+  if (!btn) return;
+
+  btn.addEventListener('click', function (e) {
+    e.preventDefault();
+    
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+    btn.style.cursor = 'wait';
+
+    fetch('/admin/run-digest-now', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error('Digest failed: ' + r.status);
+        return r.json();
+      })
+      .then(function (data) {
+        if (window.AURA_UI) {
+          AURA_UI.toast(
+            'Daily digest triggered for ' + (data.users_processed || 0) + ' user(s)',
+            'success'
+          );
+        } else {
+          alert('Daily digest triggered successfully');
+        }
+      })
+      .catch(function (err) {
+        if (window.AURA_UI) {
+          AURA_UI.toast('Failed to run digest: ' + err.message, 'error');
+        } else {
+          alert('Failed to run digest: ' + err.message);
+        }
+      })
+      .finally(function () {
+        setTimeout(function () {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.style.cursor = 'pointer';
+        }, 2000);
+      });
+  });
+});
+</script>
 {% endblock %}

@@ -785,11 +785,11 @@ def seed():
         guest_user = db.query(User).filter(User.id == 2).first()
         if not guest_user:
             guest_user = User(
-                id=2,
                 email="guest@example.com",
+                hashed_password=get_password_hash("guest123"),
                 full_name="Guest Demo User",
-                hashed_password=get_password_hash("guest123456"),
                 is_admin=False,
+                is_active=True
             )
             db.add(guest_user)
             logger.info("Created default guest user ID 2: guest@example.com")

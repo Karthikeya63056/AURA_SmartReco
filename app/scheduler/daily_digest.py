@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import List
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -17,21 +18,45 @@ logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
 
+# Domains that should NEVER receive digest emails (seeded / placeholder / fake)
+PLACEHOLDER_EMAIL_DOMAINS = {
+    "example.com",
+    "smartreco.ai",
+    "aura.com",
+    "test.com",
+    "localhost",
+    "fake.com",
+    "mailinator.com",
+}
+
+# Basic RFC-5322-ish check — catches obvious garbage like "guest" or "@@.com"
+EMAIL_RE = re.compile(r"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$", re.IGNORECASE)
+
+
+def _is_sendable_email(email: str) -> bool:
+    """Return True only for real, owned email addresses we can actually deliver to."""
+    if not email or not isinstance(email, str):
+        return False
+    email = email.strip()
+    if not EMAIL_RE.match(email):
+        return False
+    domain = email.split("@", 1)[1].lower()
+    return domain not in PLACEHOLDER_EMAIL_DOMAINS
+
 
 async def _run_daily_digest_body() -> int:
     """
     Core digest logic: find active users, generate recommendations, send emails.
-    Uses its own DB session. Intended to run inside a dedicated event loop
-    (either the scheduler loop via thread offload, or asyncio.run in a worker).
+    Skips placeholder/invalid emails so we never mail seed accounts or bounce.
     """
     logger.info("Starting Daily Digest Job...")
     db: Session = SessionLocal()
     processed_count = 0
+    skipped_count = 0
 
     try:
         twenty_four_hours_ago = datetime.now(timezone.utc) - timedelta(hours=24)
 
-        # Find distinct user IDs who had events in last 24h
         active_user_ids = db.query(Event.user_id).filter(
             Event.created_at >= twenty_four_hours_ago
         ).distinct().all()
@@ -39,7 +64,6 @@ async def _run_daily_digest_body() -> int:
         user_ids = [uid[0] for uid in active_user_ids]
         logger.info(f"Found {len(user_ids)} active users for daily digest")
 
-        # Process in batches of 10
         batch_size = 10
         for i in range(0, len(user_ids), batch_size):
             batch = user_ids[i:i + batch_size]
@@ -48,41 +72,54 @@ async def _run_daily_digest_body() -> int:
                 if not user:
                     continue
 
+                # Skip placeholder / fake / non-sendable emails
+                if not _is_sendable_email(user.email):
+                    logger.info(f"[Digest] Skipping non-sendable email for user #{uid}: {user.email!r}")
+                    skipped_count += 1
+                    continue
+
                 try:
-                    # Generate fresh recommendation via agent
                     rec_dict = await RecommendationService.generate_and_store(
                         db=db,
                         user_id=uid,
                         trigger_reason="daily_digest"
                     )
 
-                    # Fetch recommended course objects
-                    products = [
-                        get_product(db, pid)
-                        for pid in rec_dict.get("product_ids", [])
-                        if get_product(db, pid)
-                    ]
+                    products = []
+                    for pid in rec_dict.get("product_ids", []):
+                        p = get_product(db, pid)
+                        if p:
+                            products.append(p)
+
                     courses_data = [
-                        {"title": p.title, "category": p.category, "price": p.price}
+                        {
+                            "id": p.id,
+                            "title": p.title,
+                            "category": p.category,
+                            "price": p.price,
+                            "level": getattr(p, "level", ""),
+                        }
                         for p in products
                     ]
 
-                    # Send email
                     send_daily_digest_email(
                         user_email=user.email,
-                        user_name=user.full_name or "Learner",
+                        user_name=user.full_name or user.email.split("@")[0] or "Learner",
                         narrative=rec_dict.get("narrative", ""),
-                        courses=courses_data
+                        courses=courses_data,
                     )
                     processed_count += 1
+                    logger.info(f"[Digest] Sent email to {user.email} (user #{uid})")
                 except Exception as user_err:
                     logger.error(f"Error processing digest for user {uid}: {str(user_err)}")
 
-            # Rate limit sleep between batches
             if i + batch_size < len(user_ids):
                 await asyncio.sleep(1.0)
 
-        logger.info(f"Completed Daily Digest Job. Processed {processed_count} users.")
+        logger.info(
+            f"Completed Daily Digest Job. "
+            f"Processed={processed_count}, Skipped={skipped_count}, Total={len(user_ids)}."
+        )
         return processed_count
     except Exception as e:
         logger.error(f"Error in run_daily_digest_job: {str(e)}")
@@ -92,21 +129,12 @@ async def _run_daily_digest_body() -> int:
 
 
 def _run_daily_digest_in_thread() -> int:
-    """
-    Synchronous entrypoint for threadpool workers.
-    Spins up a private event loop so sync SQLAlchemy work never blocks the
-    FastAPI main loop, while still allowing await on the LangGraph agent.
-    """
+    """Synchronous entrypoint for threadpool workers."""
     return asyncio.run(_run_daily_digest_body())
 
 
 async def run_daily_digest_job() -> int:
-    """
-    Async public API for the daily digest.
-
-    Offloads the full job (sync DB + async agent + email) to a threadpool worker
-    so callers on the main event loop (admin endpoint, APScheduler) stay responsive.
-    """
+    """Async public API — offloads full job to threadpool so main loop stays responsive."""
     logger.info("Dispatching Daily Digest Job to threadpool...")
     return await run_in_threadpool(_run_daily_digest_in_thread)
 
@@ -119,7 +147,7 @@ def start_scheduler():
         hour=9,
         minute=0,
         id="daily_digest_job",
-        replace_existing=True
+        replace_existing=True,
     )
     scheduler.start()
     logger.info("APScheduler initialized: Daily Digest job scheduled for 09:00 AM daily.")

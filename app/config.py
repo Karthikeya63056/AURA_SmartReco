@@ -30,10 +30,12 @@ class Settings(BaseSettings):
     LANGCHAIN_API_KEY: str = ""
     LANGCHAIN_PROJECT: str = "smartreco"
 
-    SMTP_HOST: str = ""
-    SMTP_PORT: int = 587
+    # SMTP Email Configuration
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 465
     SMTP_USER: str = ""
-    SMTP_PASS: str = ""
+    SMTP_PASSWORD: str = ""  # Changed from SMTP_PASS to match .env
+    MAIL_FROM: str = "no-reply@aura.smartreco.ai"
 
     model_config = SettingsConfigDict(
         env_file=".env",

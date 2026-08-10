@@ -622,8 +622,13 @@ def page_register(
 def page_admin_dashboard(
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(get_admin_user),
+    user: Optional[User] = Depends(get_current_user_optional),
 ):
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    if not user.is_admin:
+        return RedirectResponse(url="/dashboard", status_code=302)
+
     product_count = db.query(Product).count()
     event_count = db.query(Event).count()
     rec_count = db.query(Recommendation).count()
@@ -657,8 +662,13 @@ def page_admin_dashboard(
 def page_admin_manage_products(
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(get_admin_user),
+    user: Optional[User] = Depends(get_current_user_optional),
 ):
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    if not user.is_admin:
+        return RedirectResponse(url="/dashboard", status_code=302)
+
     products_list = db.query(Product).order_by(Product.id.desc()).all()
     return templates.TemplateResponse(
         "admin/products.html",
@@ -675,8 +685,13 @@ def page_admin_trace(
     user_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    user: User = Depends(get_admin_user),
+    user: Optional[User] = Depends(get_current_user_optional),
 ):
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    if not user.is_admin:
+        return RedirectResponse(url="/dashboard", status_code=302)
+
     target_user = db.query(User).filter(User.id == user_id).first()
     if target_user is None:
         raise HTTPException(status_code=404, detail="User not found")
