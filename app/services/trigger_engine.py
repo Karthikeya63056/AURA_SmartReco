@@ -62,6 +62,7 @@ class TriggerEngine:
         ten_minutes_ago = now - timedelta(minutes=COOLDOWN_MINUTES)
         fifteen_minutes_ago = now - timedelta(minutes=15)
         two_hours_ago = now - timedelta(hours=2)
+        twenty_four_hours_ago = now - timedelta(hours=24)
 
         # Fetch last recommendation
         last_rec = (
@@ -84,9 +85,11 @@ class TriggerEngine:
 
         # 1. Cold-start condition: < 3 total events
         if total_events < 3:
+            # Deterministic ordering so the fallback list is stable across calls
             popular_courses = (
                 db.query(Product)
                 .filter((Product.is_popular == True) | (Product.is_trending == True))
+                .order_by(Product.id.asc())
                 .limit(5)
                 .all()
             )
@@ -143,11 +146,18 @@ class TriggerEngine:
                 "cold_start": False,
             }
 
-        # 3. Session event threshold (>= 5 events in current session)
+        # 3. Session event threshold (>= 5 events in current session,
+        #    bounded to the last 24h as a server-side safety net: a client that
+        #    never rotates its session id must not turn this into a lifetime
+        #    counter that fires the LLM agent forever)
         if current_session_id:
             session_event_count = (
                 db.query(Event)
-                .filter(Event.user_id == user_id, Event.session_id == current_session_id)
+                .filter(
+                    Event.user_id == user_id,
+                    Event.session_id == current_session_id,
+                    Event.created_at >= twenty_four_hours_ago,
+                )
                 .count()
             )
             if session_event_count >= 5:
@@ -176,9 +186,17 @@ class TriggerEngine:
         )
 
         if len(last_two_recs) >= 2:
-            rec_ids_str = [str(r.id) for r in last_two_recs]
+            rec_ids = {r.id for r in last_two_recs}
             seven_days_ago = now - timedelta(days=7)
-            
+
+            def _rec_id_of(e: Event) -> Optional[int]:
+                """Typed parse — '15' must not match recommendation id 1 or 5."""
+                raw = e.payload_json.get("recommendation_id")
+                try:
+                    return int(raw)
+                except (TypeError, ValueError):
+                    return None
+
             click_events = (
                 db.query(Event)
                 .filter(Event.event_type == "rec_click", Event.user_id == user_id)
@@ -187,9 +205,7 @@ class TriggerEngine:
                 .all()
             )
             clicks_on_recs = sum(
-                1
-                for e in click_events
-                if str(e.payload_json.get("recommendation_id", "")) in rec_ids_str
+                1 for e in click_events if _rec_id_of(e) in rec_ids
             )
 
             dismiss_events = (
@@ -200,9 +216,7 @@ class TriggerEngine:
                 .all()
             )
             dismisses_on_recs = sum(
-                1
-                for e in dismiss_events
-                if str(e.payload_json.get("recommendation_id", "")) in rec_ids_str
+                1 for e in dismiss_events if _rec_id_of(e) in rec_ids
             )
 
             if clicks_on_recs == 0 and dismisses_on_recs > 0:

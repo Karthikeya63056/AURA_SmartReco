@@ -11,6 +11,31 @@
   };
 
   /**
+   * Current browser session id (shared with the behavior tracker).
+   * Sent on every request so the server can map anonymous visitors to their
+   * own isolated guest account instead of one global shared profile.
+   */
+  function getSessionId() {
+    try {
+      if (global.SmartTracker && typeof global.SmartTracker.getSessionId === 'function') {
+        return global.SmartTracker.getSessionId();
+      }
+      const raw = global.localStorage.getItem('smartreco_session_id');
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          return (parsed && parsed.id) || null;
+        } catch (e) {
+          return raw; // legacy plain-string value
+        }
+      }
+    } catch (e) {
+      /* storage unavailable — ignore */
+    }
+    return null;
+  }
+
+  /**
    * @param {string} url
    * @param {RequestInit & { json?: any, formData?: FormData }} options
    * @returns {Promise<{ ok: boolean, status: number, data: any, response: Response }>}
@@ -25,6 +50,11 @@
     } = options;
 
     const finalHeaders = { ...DEFAULT_HEADERS, ...headers };
+
+    const sessionId = getSessionId();
+    if (sessionId) {
+      finalHeaders['X-Session-Id'] = sessionId;
+    }
     let body = rest.body;
 
     if (json !== undefined) {

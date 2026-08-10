@@ -67,10 +67,12 @@ def ingest_event_batch(
     if not payload.events:
         return {"status": "success", "ingested": 0, "trigger": {"should_run_agent": False}}
 
-    # Determine user_id (authenticated user or fallback to guest demo user ID 2)
-    user = current_user or get_anonymous_user(db)
-    user_id = user.id
+    # Determine user_id: authenticated user, or a per-session anonymous account
+    # keyed by the client's session_id so anonymous visitors never share one
+    # global profile (cross-user recommendation contamination).
     session_id = payload.events[0].session_id if payload.events else "default_session"
+    user = current_user or get_anonymous_user(db, session_id=session_id)
+    user_id = user.id
 
     # Rate limiting key:
     # - Authenticated users → user_id (stable)
@@ -101,15 +103,21 @@ def ingest_event_batch(
             logger.warning(f"Rejected disallowed event_type: {item.event_type}")
             continue
 
-        if item.idempotency_key and item.idempotency_key in existing_keys:
-            continue
+        if item.idempotency_key:
+            if item.idempotency_key in existing_keys:
+                continue
+            # Dedupe within this batch too: retried batches may repeat keys.
+            # If we didn't add them here, the UNIQUE constraint on
+            # idempotency_key would raise IntegrityError at commit time.
+            existing_keys.add(item.idempotency_key)
 
         event_obj = Event(
             user_id=user_id,
             session_id=item.session_id,
             event_type=item.event_type,
             payload_json=item.payload_json,
-            idempotency_key=item.idempotency_key
+            idempotency_key=item.idempotency_key,
+            created_at=item.created_at
         )
         db.add(event_obj)
         ingested_count += 1

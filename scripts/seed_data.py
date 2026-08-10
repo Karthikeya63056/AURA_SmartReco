@@ -782,7 +782,7 @@ def seed():
             db.add(demo_user)
             logger.info("Created default demo user: demo@smartreco.ai / demo123456")
 
-        guest_user = db.query(User).filter(User.id == 2).first()
+        guest_user = db.query(User).filter(User.email == "guest@example.com").first()
         if not guest_user:
             guest_user = User(
                 email="guest@example.com",
@@ -792,7 +792,7 @@ def seed():
                 is_active=True
             )
             db.add(guest_user)
-            logger.info("Created default guest user ID 2: guest@example.com")
+            logger.info("Created default guest user: guest@example.com")
 
         db.commit()
 

@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -46,8 +47,14 @@ def toggle_wishlist(
         added = False
     else:
         db.add(WishlistItem(user_id=current_user.id, product_id=product_id))
-        db.commit()
-        added = True
+        try:
+            db.commit()
+            added = True
+        except IntegrityError:
+            # Concurrent toggle raced: another request already inserted the same
+            # (user, product) row. Treat as "already present" instead of 500.
+            db.rollback()
+            added = False
 
     count = (
         db.query(WishlistItem)

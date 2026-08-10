@@ -514,14 +514,22 @@ def run_evaluation(quick: bool = False) -> Dict[str, Any]:
             refetch_count = metadata.get("refetch_count", 0)
             critique_retry_count = metadata.get("critique_retry_count", 0)
 
-            # 5. Also try the active recommendation as a second source of truth
-            active = RecommendationService.get_active(db, user.id)
-            if active and active.get("product_ids"):
-                product_ids = active.get("product_ids") or product_ids
+            # 5. Also try the active recommendation as a second source of truth.
+            #    Read the DB directly: get_active() can serve a cached entry
+            #    from a previous evaluation run using the same user id.
+            active = (
+                db.query(Recommendation)
+                .filter(Recommendation.user_id == user.id, Recommendation.is_active == True)
+                .order_by(Recommendation.created_at.desc())
+                .first()
+            )
+            if active:
+                if active.product_ids_json:
+                    product_ids = active.product_ids_json or product_ids
                 if not narrative:
-                    narrative = active.get("narrative") or ""
+                    narrative = active.narrative or ""
                 if not product_reasons:
-                    product_reasons = active.get("product_reasons") or []
+                    product_reasons = active.product_reasons or []
 
             # 6. Resolve titles
             recommended_titles = titles_from_ids(db, product_ids)

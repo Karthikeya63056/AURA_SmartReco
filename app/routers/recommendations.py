@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from typing import Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api/recommendations", tags=["Recommendations"])
 
 @router.get("")
 async def get_recommendations(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_optional)
 ):
@@ -26,7 +27,9 @@ async def get_recommendations(
     Falls back to popular courses for cold-start (<3 events) users.
     Uses run_in_threadpool to ensure DB queries don't block the async event loop.
     """
-    user = current_user or get_anonymous_user(db)
+    user = current_user or get_anonymous_user(
+        db, session_id=request.headers.get("X-Session-Id")
+    )
     user_id = user.id
     rec = await run_in_threadpool(_get_active_sync, user_id)
     return rec

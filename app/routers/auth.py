@@ -18,7 +18,13 @@ from app.core.security import (
 )
 from app.dependencies import ACCESS_TOKEN_COOKIE, get_current_user, get_current_user_optional
 from app.models.user import User
-from app.schemas.user import Token, UserCreate, UserResponse
+from app.schemas.user import (
+    Token,
+    UserCreate,
+    UserResponse,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+)
 from app.services.auth_service import authenticate_user, register_user
 from app.services.email_service import send_password_reset_email
 
@@ -31,11 +37,21 @@ templates = Jinja2Templates(directory="app/templates")
 _auth_rate_limit_map: Dict[str, List[float]] = {}
 AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
 MAX_AUTH_ATTEMPTS_PER_WINDOW = 5
+MAX_AUTH_RATE_LIMIT_KEYS = 10_000  # Hard cap to prevent unbounded memory growth
 
 
 def _check_auth_rate_limit(rate_key: str) -> bool:
     """Simple sliding window rate limiter for login/register."""
     now = time.time()
+
+    # Evict the oldest key when at the hard cap (attacker-controlled IPs)
+    if len(_auth_rate_limit_map) >= MAX_AUTH_RATE_LIMIT_KEYS and rate_key not in _auth_rate_limit_map:
+        try:
+            oldest_key = next(iter(_auth_rate_limit_map))
+            del _auth_rate_limit_map[oldest_key]
+        except StopIteration:
+            pass
+
     timestamps = _auth_rate_limit_map.get(rate_key, [])
     timestamps = [ts for ts in timestamps if now - ts <= AUTH_RATE_LIMIT_WINDOW_SECONDS]
     if len(timestamps) >= MAX_AUTH_ATTEMPTS_PER_WINDOW:
@@ -79,7 +95,7 @@ def _create_reset_token(user_id: int) -> str:
     """
     return create_access_token(
         subject=f"reset:{user_id}",
-        expires_delta=timedelta(minutes=5),
+        expires_delta=timedelta(minutes=15),
     )
 
 
@@ -161,7 +177,14 @@ def login(
             detail="Too many login attempts. Max 5 per minute.",
         )
 
-    user = authenticate_user(db, form_data.username, form_data.password)
+    try:
+        user = authenticate_user(db, form_data.username, form_data.password)
+    except ValueError as e:
+        # e.g. deactivated account — distinguishable from bad credentials
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -200,7 +223,7 @@ def get_me(current_user: User = Depends(get_current_user)):
 def forgot_password(
     request: Request,
     response: Response,
-    payload: Dict,
+    payload: ForgotPasswordRequest,
     db: Session = Depends(get_db),
 ):
     """
@@ -215,7 +238,7 @@ def forgot_password(
             detail="Too many requests. Try again in a minute.",
         )
 
-    email = (payload.get("email") or "").strip().lower()
+    email = payload.email.strip().lower()
     if not email:
         return {"status": "sent"}  # never reveal whether the email exists
 
@@ -228,6 +251,8 @@ def forgot_password(
     domain = email.split("@", 1)[1] if "@" in email else ""
     placeholder_domains = {
         "example.com", "smartreco.ai", "aura.com", "test.com", "localhost",
+        # per-session anonymous visitor accounts created by dependencies
+        "smartreco.local",
     }
     if domain in placeholder_domains:
         logger.info(f"[forgot-password] Skipping placeholder domain: {domain}")
@@ -246,24 +271,12 @@ def forgot_password(
 
 @router.post("/reset-password")
 def reset_password(
-    payload: Dict,
+    payload: ResetPasswordRequest,
     db: Session = Depends(get_db),
 ):
     """Validate the reset token and update the user's password."""
-    token = (payload.get("token") or "").strip()
-    new_password = payload.get("new_password") or ""
-
-    if not token or not new_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token and new password are required.",
-        )
-
-    if len(new_password) < 8:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password must be at least 8 characters.",
-        )
+    token = payload.token.strip()
+    new_password = payload.new_password
 
     user_id = _verify_reset_token(token)
     user = db.query(User).filter(User.id == user_id).first()

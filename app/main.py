@@ -16,6 +16,7 @@ from sqlalchemy import or_, func
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.database import engine, Base, get_db
+from app.config import settings
 from app.dependencies import get_current_user_optional, get_admin_user
 from app.models.product import Product
 from app.models.user import User
@@ -59,6 +60,7 @@ class MaxBodySizeMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         if request.method in ("POST", "PUT", "PATCH"):
+            # Content-Length check
             content_length = request.headers.get("content-length")
             if content_length:
                 try:
@@ -67,6 +69,12 @@ class MaxBodySizeMiddleware(BaseHTTPMiddleware):
                     is_too_large = True
                 if is_too_large:
                     return HTMLResponse("Payload too large", status_code=413)
+
+            # Chunked transfer-encoding bypasses Content-Length entirely
+            transfer_encoding = request.headers.get("transfer-encoding", "").lower()
+            if "chunked" in transfer_encoding:
+                return HTMLResponse("Chunked request bodies are not allowed", status_code=413)
+
         return await call_next(request)
 
 
@@ -296,9 +304,14 @@ app = FastAPI(
 )
 
 # Register security headers middleware
+_allowed_origins = [
+    origin.strip()
+    for origin in settings.CORS_ORIGINS.split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -493,10 +506,16 @@ def page_wishlist(
         .all()
     )
     courses = []
-    for it in items:
-        p = db.query(Product).filter(Product.id == it.product_id).first()
-        if p:
-            courses.append(p)
+    if items:
+        product_ids = [it.product_id for it in items]
+        products_by_id = {
+            p.id: p
+            for p in db.query(Product).filter(Product.id.in_(product_ids)).all()
+        }
+        for it in items:
+            p = products_by_id.get(it.product_id)
+            if p:
+                courses.append(p)
 
     return templates.TemplateResponse(
         "pages/wishlist.html",
@@ -639,7 +658,7 @@ def page_admin_dashboard(
 
     # Compute recommendation outcome metrics
     from app.routers.admin import _compute_recommendation_outcomes
-    outcomes = _compute_recommendation_outcomes(db)
+    outcomes = _compute_recommendation_outcomes()
 
     return templates.TemplateResponse(
         "admin/dashboard.html",

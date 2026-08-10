@@ -18,8 +18,3 @@ class RecommendationResponse(BaseModel):
     class Config:
         from_attributes = True
         populate_by_name = True
-
-
-class RecommendationFeedback(BaseModel):
-    recommendation_id: int
-    feedback_type: str = Field(description="helpful, irrelevant, clicked, enrolled")

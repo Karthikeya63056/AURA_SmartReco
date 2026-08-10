@@ -113,13 +113,23 @@ class RecommendationService:
             Recommendation.is_active == True
         ).first()
 
+        # Self-correction counters live on the final graph state; surface them
+        # under "metadata" so evaluation harnesses can actually measure them
+        # (previously always 0 because the key was never returned).
+        metadata = dict(final_state.get("metadata") or {})
+        metadata.setdefault("refetch_count", final_state.get("refetch_count", 0))
+        metadata.setdefault(
+            "critique_retry_count", final_state.get("critique_retry_count", 0)
+        )
+
         return {
             "id": rec.id if rec else 0,
             "narrative": final_state.get("final_narrative", ""),
             "product_ids": final_state.get("recommended_product_ids", []),
             "product_reasons": final_state.get("product_reasons", []),
             "quality_score": final_state.get("quality_score", 80),
-            "trigger_reason": trigger_reason
+            "trigger_reason": trigger_reason,
+            "metadata": metadata,
         }
 
     @staticmethod
@@ -180,9 +190,10 @@ class RecommendationService:
             return result
 
         # Cold-Start Fallback if no recommendation exists yet
+        # Deterministic ordering so "popular/trending" is stable across calls
         popular_products = db.query(Product).filter(
             (Product.is_popular == True) | (Product.is_trending == True)
-        ).limit(5).all()
+        ).order_by(Product.id.asc()).limit(5).all()
 
         return {
             "id": 0,

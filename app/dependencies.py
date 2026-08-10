@@ -1,4 +1,8 @@
+import hashlib
 import logging
+import secrets
+import time
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
@@ -7,7 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import decode_access_token, get_password_hash
+from app.models.anonymous_session import AnonymousSession
+from app.models.event import Event
+from app.models.recommendation import Recommendation
 from app.models.user import User
+from app.models.user_profile import UserProfile
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +26,12 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 ACCESS_TOKEN_COOKIE = "access_token"
 
 GUEST_EMAIL = "guest@example.com"
+
+# Per-session anonymous visitor accounts
+ANON_EMAIL_DOMAIN = "guest.smartreco.local"
+ANON_SESSION_TTL_DAYS = 30
+_ANON_GC_INTERVAL_SECONDS = 3600
+_last_anon_gc_time = 0.0
 
 
 def _extract_token(
@@ -49,14 +63,62 @@ def _user_from_token(db: Session, token: str) -> Optional[User]:
         user_id = int(payload["sub"])
     except (TypeError, ValueError):
         return None
-    return db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id).first()
+    if user and not user.is_active:
+        # Deactivated accounts must not keep using their cookie/bearer session
+        return None
+    return user
 
 
-def get_anonymous_user(db: Session) -> User:
+def _anon_session_key(session_id: str) -> str:
+    """Deterministic, opaque key for a client-supplied session id."""
+    return hashlib.sha256(session_id.encode("utf-8")).hexdigest()
+
+
+def _gc_stale_anonymous_sessions(db: Session) -> None:
     """
-    Guest user for unauthenticated event tracking.
-    Look up by email (no hard-coded primary key).
+    Delete anonymous session mappings (and their user rows) that have been
+    inactive for > ANON_SESSION_TTL_DAYS. Runs at most once per hour.
+    Users that still have events or recommendations are kept (mapping only
+    removed) so history is never silently dropped.
     """
+    global _last_anon_gc_time
+    now = time.time()
+    if now - _last_anon_gc_time < _ANON_GC_INTERVAL_SECONDS:
+        return
+    _last_anon_gc_time = now
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=ANON_SESSION_TTL_DAYS)
+    stale = (
+        db.query(AnonymousSession)
+        .filter(AnonymousSession.last_seen_at < cutoff)
+        .all()
+    )
+    if not stale:
+        return
+
+    stale_user_ids = [row.user_id for row in stale]
+    users_with_data = set()
+    users_with_data.update(
+        row[0] for row in db.query(Event.user_id).filter(Event.user_id.in_(stale_user_ids))
+    )
+    users_with_data.update(
+        row[0] for row in db.query(Recommendation.user_id).filter(Recommendation.user_id.in_(stale_user_ids))
+    )
+    removable = [uid for uid in stale_user_ids if uid not in users_with_data]
+
+    if removable:
+        db.query(UserProfile).filter(UserProfile.user_id.in_(removable)).delete(synchronize_session=False)
+        db.query(User).filter(User.id.in_(removable)).delete(synchronize_session=False)
+
+    db.query(AnonymousSession).filter(AnonymousSession.id.in_([row.id for row in stale])).delete(
+        synchronize_session=False
+    )
+    db.commit()
+
+
+def _get_shared_guest(db: Session) -> User:
+    """Legacy fallback guest when no session_id is available (API-only clients)."""
     user = db.query(User).filter(User.email == GUEST_EMAIL).first()
     if user:
         return user
@@ -77,6 +139,72 @@ def get_anonymous_user(db: Session) -> User:
         if not user:
             raise
     return user
+
+
+def _create_anonymous_session_user(db: Session, session_key: str) -> User:
+    """Create (or fetch, on race) the isolated user for an anonymous session."""
+    email = f"anon_{session_key[:16]}@{ANON_EMAIL_DOMAIN}"
+    user = db.query(User).filter(User.email == email).first()
+    if user:
+        return user
+
+    user = User(
+        email=email,
+        hashed_password=get_password_hash(secrets.token_urlsafe(32)),
+        full_name="Anonymous Visitor",
+        is_admin=False,
+    )
+    db.add(user)
+    try:
+        db.commit()
+        db.refresh(user)
+    except Exception:
+        db.rollback()  # concurrent request created the same user — reuse it
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise
+
+    anon_session = AnonymousSession(id=session_key, user_id=user.id)
+    db.add(anon_session)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()  # concurrent request created the mapping — reuse it
+    return user
+
+
+def get_anonymous_user(db: Session, session_id: Optional[str] = None) -> User:
+    """
+    Anonymous user for unauthenticated event tracking.
+
+    - With a session_id: returns a dedicated per-browser-session user row so
+      anonymous visitors never share one global profile. Mapping is stable via
+      an opaque hash of the session_id (never a raw client string).
+    - Without one (legacy clients): shared guest account fallback.
+    """
+    _gc_stale_anonymous_sessions(db)
+
+    if session_id:
+        session_id = session_id.strip()[:128]
+        if session_id:
+            session_key = _anon_session_key(session_id)
+            anon_session = (
+                db.query(AnonymousSession)
+                .filter(AnonymousSession.id == session_key)
+                .first()
+            )
+            if anon_session:
+                anon_session.last_seen_at = datetime.now(timezone.utc)
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                user = db.query(User).filter(User.id == anon_session.user_id).first()
+                if user:
+                    return user
+            return _create_anonymous_session_user(db, session_key)
+
+    return _get_shared_guest(db)
 
 
 def get_current_user_optional(

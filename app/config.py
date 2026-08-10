@@ -34,8 +34,12 @@ class Settings(BaseSettings):
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 465
     SMTP_USER: str = ""
-    SMTP_PASSWORD: str = ""  # Changed from SMTP_PASS to match .env
+    SMTP_PASSWORD: str = ""  # matches .env.example; SMTP_SSL is used → 465
     MAIL_FROM: str = "no-reply@aura.smartreco.ai"
+
+    # Comma-separated list of allowed CORS origins (cookie auth requires the
+    # exact scheme://host:port that the frontend is served from)
+    CORS_ORIGINS: str = "http://localhost:8000,http://127.0.0.1:8000"
 
     model_config = SettingsConfigDict(
         env_file=".env",

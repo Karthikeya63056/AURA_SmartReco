@@ -5,6 +5,7 @@ from app.models.event import Event
 from app.models.recommendation import Recommendation
 from app.models.user_profile import UserProfile
 from app.models.wishlist import WishlistItem
+from app.models.anonymous_session import AnonymousSession
 
 __all__ = [
     "Base",
@@ -13,4 +14,6 @@ __all__ = [
     "Event",
     "Recommendation",
     "UserProfile",
+    "WishlistItem",
+    "AnonymousSession",
 ]

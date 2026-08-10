@@ -1,10 +1,10 @@
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from app.core.database import get_db
+from app.core.database import SessionLocal
 from app.core.cache import cache
 from app.dependencies import get_admin_user
 from app.models.user import User
@@ -21,43 +21,56 @@ DIGEST_COOLDOWN_KEY = "admin:digest_cooldown"
 DIGEST_COOLDOWN_SECONDS = 3600  # 1 hour
 
 
-def _fetch_agent_trace_data(db: Session, user_id: int) -> Dict[str, Any]:
-    """Synchronous database query helper for agent trace inspection."""
-    profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
-    recent_events = db.query(Event).filter(Event.user_id == user_id).order_by(Event.created_at.desc()).limit(20).all()
-    recommendations = db.query(Recommendation).filter(Recommendation.user_id == user_id).order_by(Recommendation.created_at.desc()).limit(5).all()
+def _fetch_agent_trace_data(user_id: int, db: Optional[Session] = None) -> Dict[str, Any]:
+    """
+    Synchronous database query helper for agent trace inspection.
 
-    return {
-        "user_id": user_id,
-        "profile": {
-            "interests": profile.interests_json if profile else [],
-            "skill_level": profile.skill_level if profile else "Unknown",
-            "intent": profile.intent if profile else "Unknown",
-            "last_calculated_at": profile.last_calculated_at if profile else None
-        },
-        "event_count": len(recent_events),
-        "recent_events": [
-            {
-                "id": e.id,
-                "type": e.event_type,
-                "session_id": e.session_id,
-                "created_at": e.created_at,
-                "payload": e.payload_json
-            } for e in recent_events
-        ],
-        "recommendation_traces": [
-            {
-                "id": r.id,
-                "trigger_reason": r.trigger_reason,
-                "quality_score": r.quality_score,
-                "refetch_count": r.refetch_count,
-                "is_active": r.is_active,
-                "product_ids": r.product_ids_json,
-                "metadata": r.metadata_json,
-                "created_at": r.created_at
-            } for r in recommendations
-        ]
-    }
+    When called from a threadpool worker it must NOT receive the request-scoped
+    session (it belongs to the event-loop thread), so it opens its own unless
+    an explicit session is supplied (tests / SSR page rendering).
+    """
+    owns_session = db is None
+    if owns_session:
+        db = SessionLocal()
+    try:
+        profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+        recent_events = db.query(Event).filter(Event.user_id == user_id).order_by(Event.created_at.desc()).limit(20).all()
+        recommendations = db.query(Recommendation).filter(Recommendation.user_id == user_id).order_by(Recommendation.created_at.desc()).limit(5).all()
+
+        return {
+            "user_id": user_id,
+            "profile": {
+                "interests": profile.interests_json if profile else [],
+                "skill_level": profile.skill_level if profile else "Unknown",
+                "intent": profile.intent if profile else "Unknown",
+                "last_calculated_at": profile.last_calculated_at if profile else None
+            },
+            "event_count": len(recent_events),
+            "recent_events": [
+                {
+                    "id": e.id,
+                    "type": e.event_type,
+                    "session_id": e.session_id,
+                    "created_at": e.created_at,
+                    "payload": e.payload_json
+                } for e in recent_events
+            ],
+            "recommendation_traces": [
+                {
+                    "id": r.id,
+                    "trigger_reason": r.trigger_reason,
+                    "quality_score": r.quality_score,
+                    "refetch_count": r.refetch_count,
+                    "is_active": r.is_active,
+                    "product_ids": r.product_ids_json,
+                    "metadata": r.metadata_json,
+                    "created_at": r.created_at
+                } for r in recommendations
+            ]
+        }
+    finally:
+        if owns_session:
+            db.close()
 
 
 @router.post("/run-digest-now")
@@ -96,96 +109,105 @@ async def trigger_daily_digest_now(
 @router.get("/agent-trace/{user_id}")
 async def get_agent_trace(
     user_id: int,
-    db: Session = Depends(get_db),
     admin: User = Depends(get_admin_user)
 ):
     """
     Inspect recent agent execution trace, user profile, and recommendation metadata.
     Uses run_in_threadpool for non-blocking DB access.
     """
-    trace_data = await run_in_threadpool(_fetch_agent_trace_data, db, user_id)
+    trace_data = await run_in_threadpool(_fetch_agent_trace_data, user_id)
     return trace_data
 
 
-def _compute_recommendation_outcomes(db: Session) -> Dict[str, Any]:
-    """Compute click/dismiss/CTR metrics for recommendations (last 30 days)."""
+def _compute_recommendation_outcomes(db: Optional[Session] = None) -> Dict[str, Any]:
+    """Compute click/dismiss/CTR metrics for recommendations (last 30 days).
+
+    Opens its own session when called from a threadpool worker; accepts an
+    explicit session for tests / synchronous SSR rendering.
+    """
     from datetime import datetime, timedelta, timezone
     from sqlalchemy import func, cast, String
 
-    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    owns_session = db is None
+    if owns_session:
+        db = SessionLocal()
+    try:
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
 
-    # Get recent recommendations
-    recent_recs_query = db.query(Recommendation).filter(
-        Recommendation.created_at >= thirty_days_ago
-    )
-    total_recs = recent_recs_query.count()
+        # Get recent recommendations
+        recent_recs_query = db.query(Recommendation).filter(
+            Recommendation.created_at >= thirty_days_ago
+        )
+        total_recs = recent_recs_query.count()
 
-    # The detail table is intentionally bounded for rendering; its count is
-    # not used as the overall CTR denominator.
-    recent_recs = recent_recs_query.order_by(Recommendation.created_at.desc()).limit(20).all()
+        # The detail table is intentionally bounded for rendering; its count is
+        # not used as the overall CTR denominator.
+        recent_recs = recent_recs_query.order_by(Recommendation.created_at.desc()).limit(20).all()
 
-    # Count all rec_click and rec_dismiss events
-    total_clicks = db.query(Event).filter(
-        Event.event_type == "rec_click",
-        Event.created_at >= thirty_days_ago,
-    ).count()
-
-    total_dismisses = db.query(Event).filter(
-        Event.event_type == "rec_dismiss",
-        Event.created_at >= thirty_days_ago,
-    ).count()
-
-    overall_ctr = round(
-        (total_clicks / total_recs * 100) if total_recs > 0 else 0, 1
-    )
-
-    # Per-recommendation breakdown
-    rec_metrics = []
-    for rec in recent_recs:
-        rec_id_str = str(rec.id)
-
-        click_count = db.query(Event).filter(
+        # Count all rec_click and rec_dismiss events
+        total_clicks = db.query(Event).filter(
             Event.event_type == "rec_click",
             Event.created_at >= thirty_days_ago,
-            cast(func.json_extract(Event.payload_json, "$.recommendation_id"), String) == rec_id_str,
         ).count()
 
-        dismiss_count = db.query(Event).filter(
+        total_dismisses = db.query(Event).filter(
             Event.event_type == "rec_dismiss",
             Event.created_at >= thirty_days_ago,
-            cast(func.json_extract(Event.payload_json, "$.recommendation_id"), String) == rec_id_str,
         ).count()
 
-        interactions = click_count + dismiss_count
-        ctr = round((click_count / interactions * 100) if interactions > 0 else 0, 1)
+        overall_ctr = round(
+            (total_clicks / total_recs * 100) if total_recs > 0 else 0, 1
+        )
 
-        rec_metrics.append({
-            "id": rec.id,
-            "user_id": rec.user_id,
-            "trigger_reason": rec.trigger_reason,
-            "quality_score": rec.quality_score,
-            "clicks": click_count,
-            "dismisses": dismiss_count,
-            "ctr": ctr,
-            "created_at": rec.created_at,
-        })
+        # Per-recommendation breakdown
+        rec_metrics = []
+        for rec in recent_recs:
+            rec_id_str = str(rec.id)
 
-    return {
-        "total_recs": total_recs,
-        "total_clicks": total_clicks,
-        "total_dismisses": total_dismisses,
-        "overall_ctr": overall_ctr,
-        "rec_metrics": rec_metrics,
-    }
+            click_count = db.query(Event).filter(
+                Event.event_type == "rec_click",
+                Event.created_at >= thirty_days_ago,
+                cast(func.json_extract(Event.payload_json, "$.recommendation_id"), String) == rec_id_str,
+            ).count()
+
+            dismiss_count = db.query(Event).filter(
+                Event.event_type == "rec_dismiss",
+                Event.created_at >= thirty_days_ago,
+                cast(func.json_extract(Event.payload_json, "$.recommendation_id"), String) == rec_id_str,
+            ).count()
+
+            interactions = click_count + dismiss_count
+            ctr = round((click_count / interactions * 100) if interactions > 0 else 0, 1)
+
+            rec_metrics.append({
+                "id": rec.id,
+                "user_id": rec.user_id,
+                "trigger_reason": rec.trigger_reason,
+                "quality_score": rec.quality_score,
+                "clicks": click_count,
+                "dismisses": dismiss_count,
+                "ctr": ctr,
+                "created_at": rec.created_at,
+            })
+
+        return {
+            "total_recs": total_recs,
+            "total_clicks": total_clicks,
+            "total_dismisses": total_dismisses,
+            "overall_ctr": overall_ctr,
+            "rec_metrics": rec_metrics,
+        }
+    finally:
+        if owns_session:
+            db.close()
 
 
 @router.get("/outcomes")
 async def get_recommendation_outcomes(
-    db: Session = Depends(get_db),
     admin: User = Depends(get_admin_user)
 ):
     """
     Recommendation performance metrics: clicks, dismisses, and CTR.
     """
-    outcomes = await run_in_threadpool(_compute_recommendation_outcomes, db)
+    outcomes = await run_in_threadpool(_compute_recommendation_outcomes)
     return outcomes

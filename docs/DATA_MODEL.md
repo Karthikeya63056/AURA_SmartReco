@@ -63,7 +63,7 @@ SmartReco 2026 utilizes a relational SQLite schema for structured data and a Chr
 ## 2. ChromaDB Vector Store Schema
 
 - **Collection Name**: `products`
-- **Embedding Function**: Custom `MeshEmbeddingFunction` calling `openai/text-embedding-3-small` via `api.meshapi.ai/v1`.
+- **Embedding Function**: Custom `MeshEmbeddingFunction` calling `sentence-transformers/all-minilm-l6-v2` via `api.meshapi.ai/v1`.
 - **Document Text Format**:
   `Title: {title}. Category: {category}. Level: {level}. Description: {description}. Tags: {tags}`
 - **Metadata Fields**:

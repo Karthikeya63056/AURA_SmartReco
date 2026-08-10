@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, field_validator
 import json
@@ -42,7 +42,7 @@ class EventBatchItem(BaseModel):
     )
     payload_json: Dict[str, Any] = Field(default_factory=dict)
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
-    created_at: Optional[datetime] = Field(default_factory=datetime.utcnow)
+    created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @field_validator("event_type")
     @classmethod

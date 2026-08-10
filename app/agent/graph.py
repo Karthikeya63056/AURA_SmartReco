@@ -10,7 +10,6 @@ from app.agent.nodes import (
     critique_narrative_node,
     store_node,
     refetch_broaden_node,
-    refetch_node
 )
 
 try:

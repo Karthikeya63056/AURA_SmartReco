@@ -6,9 +6,27 @@ from typing import Any, Optional, Dict
 class InMemoryTTLCache:
     """Thread-safe In-memory Key-Value cache with TTL (Time To Live)."""
 
-    def __init__(self):
+    def __init__(self, cleanup_interval_seconds: float = 300):
         self._cache: Dict[str, tuple[float, float, Any]] = {}
         self._lock = threading.Lock()
+        self._cleanup_interval = max(10.0, float(cleanup_interval_seconds))
+        # Background daemon periodically purges expired keys so the cache can't
+        # grow unboundedly with low-traffic keys that nobody ever reads again.
+        self._cleanup_thread = threading.Thread(
+            target=self._run_background_cleanup,
+            name="ttl-cache-cleanup",
+            daemon=True,
+        )
+        self._cleanup_thread.start()
+
+    def _run_background_cleanup(self) -> None:
+        while True:
+            time.sleep(self._cleanup_interval)
+            try:
+                self.cleanup()
+            except Exception:
+                # cleanup must never kill the daemon thread
+                pass
 
     def set(self, key: str, value: Any, ttl_seconds: float) -> None:
         """Store key-value pair with TTL in seconds."""

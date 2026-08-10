@@ -180,22 +180,3 @@ Please regenerate the narrative, ensuring you:
 3. Follow the original persuasive AIDA structure.
 4. Do not invent user actions (searches, wishlist, FAQ, instructor views, shares) that were not provided.
 """
-
-REASON_GENERATION_PROMPT = """You are an expert at explaining why an educational course is a great fit for a learner.
-
-User Profile & Context:
-- Key Interests: {interests}
-- Skill Level: {skill_level}
-- Primary Intent: {intent}
-- Recent Search Query: {search_query}
-
-Recommended Courses:
-{courses_list}
-
-For each course listed above, write a concise, compelling 5–10 word reason explaining why it was recommended for this user.
-
-**IMPORTANT:** Return ONLY a valid JSON array of strings in the exact same order as the courses.
-Do NOT include any markdown code blocks, intro text, explanations, or extra quotes around the array.
-Example output: ["Matched your search for LangGraph architecture", "Tailored for your Intermediate level in Machine Learning"]
-
-Output:"""

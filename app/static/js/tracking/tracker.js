@@ -18,6 +18,10 @@
   const BATCH_FLUSH_INTERVAL_MS = 5000;
   const MAX_QUEUE_SIZE = 20;
   const SESSION_KEY = 'smartreco_session_id';
+  // Rotate the session after this much idle time. The trigger engine counts
+  // events per session (>= 5 → agent run); an ever-lasting session id would
+  // turn that threshold into a lifetime counter and fire the LLM agent forever.
+  const SESSION_IDLE_TTL_MS = 60 * 60 * 1000; // 60 minutes
 
   let queue = [];
   let sessionId = getOrCreateSessionId();
@@ -28,14 +32,36 @@
 
   function getOrCreateSessionId() {
     try {
-      let id = localStorage.getItem(SESSION_KEY);
+      let id = null;
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (raw) {
+        try {
+          const data = JSON.parse(raw);
+          if (data && data.id) {
+            const lastSeen = Number(data.ts) || 0;
+            if (Date.now() - lastSeen <= SESSION_IDLE_TTL_MS) {
+              id = data.id;
+            }
+          }
+        } catch (e) {
+          id = raw; // legacy plain-string value, keep it
+        }
+      }
       if (!id) {
         id = 'sess_' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
-        localStorage.setItem(SESSION_KEY, id);
       }
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ id: id, ts: Date.now() }));
       return id;
     } catch {
       return 'sess_' + Date.now().toString(36);
+    }
+  }
+
+  function touchSession() {
+    try {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ id: sessionId, ts: Date.now() }));
+    } catch (e) {
+      /* storage unavailable — ignore */
     }
   }
 
@@ -92,6 +118,8 @@
 
   function flush(isUnload) {
     if (queue.length === 0) return;
+
+    touchSession();
 
     const eventsToSend = queue.splice(0, queue.length);
     const body = JSON.stringify({ events: eventsToSend });

@@ -10,7 +10,6 @@ from app.agent.state import AgentState
 from app.agent.prompts import (
     BEHAVIOR_ANALYSIS_PROMPT,
     EVALUATOR_PROMPT,
-    PERSUASIVE_PROMPT,
     PERSUASIVE_PROMPT_ANALYTICAL,
     PERSUASIVE_PROMPT_SOCIAL,
     PERSUASIVE_PROMPT_MOTIVATIONAL,
@@ -518,37 +517,6 @@ def _generate_template_reasons(
     return reasons
 
 
-def _extract_json_from_llm(text: str) -> list | None:
-    """Try to extract a JSON array or line-based list from the LLM response."""
-    if not text:
-        return None
-    # Direct JSON parse
-    try:
-        data = json.loads(text)
-        if isinstance(data, list):
-            return data
-    except Exception:
-        pass
-
-    # Regex search for JSON array [...]
-    match = re.search(r'\[.*\]', text, re.DOTALL)
-    if match:
-        try:
-            data = json.loads(match.group())
-            if isinstance(data, list):
-                return data
-        except Exception:
-            pass
-
-    # Line-by-line fallback
-    lines = [line.strip().lstrip("-*123456789. ").strip('"').strip("'") for line in text.split("\n") if line.strip()]
-    cleaned_lines = [l for l in lines if l and not l.startswith("[") and not l.startswith("]")]
-    if cleaned_lines:
-        return cleaned_lines
-
-    return None
-
-
 async def evaluate_and_rerank_node(state: AgentState) -> Dict[str, Any]:
     """Node 3: Score candidate relevance & rerank via Mesh API."""
     user_profile = state.get("user_profile", {})
@@ -584,9 +552,22 @@ async def evaluate_and_rerank_node(state: AgentState) -> Dict[str, Any]:
             temperature=0.2
         )
         data = _extract_json(response_text)
-        
-        quality_score = int(data.get("quality_score", 75))
-        top_ids = data.get("top_product_ids", [c["id"] for c in candidates[:3]])
+
+        try:
+            quality_score = int(data.get("quality_score", 75))
+        except (TypeError, ValueError):
+            logger.warning(f"[Node 3] Non-numeric quality_score from LLM: {data.get('quality_score')!r}; using 75")
+            quality_score = 75
+
+        # Only accept candidate IDs that were actually retrieved — the LLM can
+        # hallucinate IDs; filtering keeps narrative/titles grounded in reality.
+        candidate_id_set = {c["id"] for c in candidates}
+        raw_top_ids = data.get("top_product_ids", [])
+        if not isinstance(raw_top_ids, list):
+            raw_top_ids = []
+        top_ids = [pid for pid in raw_top_ids if pid in candidate_id_set][:5]
+        if not top_ids:
+            top_ids = [c["id"] for c in candidates[:3]]
         needs_refetch = bool(data.get("needs_refetch", False))
         reasoning = data.get("reasoning", "")
 
@@ -906,7 +887,3 @@ async def refetch_broaden_node(state: AgentState) -> Dict[str, Any]:
         "drop_filters": True,
         "search_query": new_query,
     }
-
-
-# Alias for backward compatibility
-refetch_node = refetch_broaden_node

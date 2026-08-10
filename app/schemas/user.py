@@ -12,11 +12,6 @@ class UserCreate(UserBase):
     password: str = Field(..., min_length=8, max_length=128, description="Password must be at least 8 characters")
 
 
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-
 class UserResponse(UserBase):
     id: int
     is_admin: bool
@@ -31,6 +26,10 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
-class TokenData(BaseModel):
-    email: Optional[str] = None
-    user_id: Optional[int] = None
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=1, max_length=512)
+    new_password: str = Field(..., min_length=8, max_length=128)
