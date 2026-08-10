@@ -79,7 +79,7 @@ def _create_reset_token(user_id: int) -> str:
     """
     return create_access_token(
         subject=f"reset:{user_id}",
-        expires_delta=timedelta(minutes=15),
+        expires_delta=timedelta(minutes=5),
     )
 
 

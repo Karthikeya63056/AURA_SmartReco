@@ -23,6 +23,7 @@ ALLOWED_EVENT_TYPES = {
     "faq_expand",
     "instructor_view",
     "share",
+    "filter",
 }
 
 MAX_PAYLOAD_BYTES = 5 * 1024  # 5 KB

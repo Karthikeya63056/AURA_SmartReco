@@ -177,9 +177,13 @@ class TriggerEngine:
 
         if len(last_two_recs) >= 2:
             rec_ids_str = [str(r.id) for r in last_two_recs]
+            seven_days_ago = now - timedelta(days=7)
+            
             click_events = (
                 db.query(Event)
                 .filter(Event.event_type == "rec_click", Event.user_id == user_id)
+                .filter(Event.created_at >= seven_days_ago)
+                .limit(50)
                 .all()
             )
             clicks_on_recs = sum(
@@ -191,6 +195,8 @@ class TriggerEngine:
             dismiss_events = (
                 db.query(Event)
                 .filter(Event.event_type == "rec_dismiss", Event.user_id == user_id)
+                .filter(Event.created_at >= seven_days_ago)
+                .limit(50)
                 .all()
             )
             dismisses_on_recs = sum(

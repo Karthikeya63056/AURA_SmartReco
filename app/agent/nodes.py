@@ -606,8 +606,8 @@ async def evaluate_and_rerank_node(state: AgentState) -> Dict[str, Any]:
         }
     except Exception as e:
         logger.error(f"Error in evaluate_and_rerank_node: {str(e)}")
-        fallback_ids = [c["id"] for c in candidates[:3]] if candidates else [1, 2, 3]
-        fallback_reasons = _generate_template_reasons(fallback_ids, user_profile, search_query)
+        fallback_ids = [c["id"] for c in candidates[:3]] if candidates else []
+        fallback_reasons = _generate_template_reasons(fallback_ids, user_profile, search_query) if fallback_ids else []
         return {
             "quality_score": 70,
             "recommended_product_ids": fallback_ids,
