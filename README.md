@@ -1039,7 +1039,7 @@ All admin endpoints require administrator authorization.
 
 ## 🌐 Live Demo
 
-🎥 **Project walkthrough:** [Add demo video link here]
+🎥 **Project walkthrough:** [Watch the demo on YouTube](https://youtu.be/DTa-bOqlpYc)
 
 The demo video will showcase the AURA dashboard, learner interactions, recommendation generation, the agentic recommendation workflow, and the daily digest email delivery.
 
