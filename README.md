@@ -16,6 +16,7 @@
 ## 🧭 Table of Contents
 
 - [🌌 Overview](#-overview)
+- [🎥 Live Demo](#-live-demo--walkthrough)
 - [🎯 Why AURA?](#-why-aura)
 - [✨ Features](#-features)
 - [🏗️ Architecture](#️-architecture)
@@ -78,6 +79,18 @@ The recommendation workflow then:
 9. 💾 Stores the final recommendation
 
 For learners without enough behavioral history, AURA provides a popular/trending course fallback rather than immediately requiring personalized agent execution.
+
+---
+
+## 🎥 Live Demo & Walkthrough
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=DTa-bOqlpYc">
+    <img src="https://img.youtube.com/vi/DTa-bOqlpYc/maxresdefault.jpg" alt="Watch Demo Video" width="600" style="border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);" />
+  </a>
+</p>
+
+> **In this video:** See the behavioral tracker in action, watch the LangGraph agent reason over user intent in real-time, inspect the admin traces, and see the proactive daily digest email land in an inbox.
 
 ---
 
@@ -1036,12 +1049,6 @@ Example response:
 All admin endpoints require administrator authorization.
 
 ---
-
-## 🌐 Live Demo
-
-🎥 **Project walkthrough:** [Watch the demo on YouTube](https://youtu.be/DTa-bOqlpYc)
-
-The demo video will showcase the AURA dashboard, learner interactions, recommendation generation, the agentic recommendation workflow, and the daily digest email delivery.
 
 ## 🧪 Testing
 
