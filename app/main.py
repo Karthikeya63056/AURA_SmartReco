@@ -25,10 +25,13 @@ from app.models.event import Event
 from app.models.recommendation import Recommendation
 from app.models.user_profile import UserProfile
 from app.models.wishlist import WishlistItem
+from app.models.anonymous_session import AnonymousSession
 from app.routers import auth, products, events, recommendations, admin, wishlist
 from app.scheduler.daily_digest import start_scheduler
 from app.services.product_service import list_products
 from app.core import event_buffer  # Rev5: async event buffer
+from app.services import dispatcher  # Rev5 Phase 3: agent dispatcher
+from app.jobs import stale_run_sweep  # Rev5 Phase 3: stale-run sweep
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("smartreco")
@@ -242,7 +245,7 @@ def build_signal_counts(db: Session, user_id: int) -> Dict[str, int]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifecycle: create tables, reindex, start scheduler, start event buffer."""
+    """Lifecycle: create tables, reindex, start scheduler, start event buffer, start dispatcher + sweep."""
     Base.metadata.create_all(bind=engine)
 
     try:
@@ -298,15 +301,27 @@ async def lifespan(app: FastAPI):
     flush_task = asyncio.create_task(event_buffer.flush_loop())
     logger.info("[Lifespan] Event buffer flush loop started")
 
+    # Rev5 Phase 3: Start dispatcher loop + stale-run sweep
+    dispatcher_task = dispatcher.start()
+    logger.info("[Lifespan] Agent dispatcher loop started")
+    stale_run_sweep.start_sweep_scheduler()
+
     yield
 
-    # Rev5: Cancel flush loop on shutdown
+    # Rev5: Cancel flush loop + dispatcher, stop sweep on shutdown
     flush_task.cancel()
+    dispatcher_task.cancel()
     try:
         await flush_task
     except asyncio.CancelledError:
         pass
+    try:
+        await dispatcher_task
+    except asyncio.CancelledError:
+        pass
+    stale_run_sweep.stop_sweep_scheduler()
     logger.info("[Lifespan] Event buffer flush loop stopped")
+    logger.info("[Lifespan] Agent dispatcher loop stopped")
     logger.info("Shutting down SmartReco 2026 application...")
 
 
