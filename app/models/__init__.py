@@ -6,6 +6,8 @@ from app.models.recommendation import Recommendation
 from app.models.user_profile import UserProfile
 from app.models.wishlist import WishlistItem
 from app.models.anonymous_session import AnonymousSession
+from app.models.agent_run import AgentRun
+from app.models.vector_outbox import VectorOutbox
 
 __all__ = [
     "Base",
@@ -16,4 +18,6 @@ __all__ = [
     "UserProfile",
     "WishlistItem",
     "AnonymousSession",
+    "AgentRun",
+    "VectorOutbox",
 ]

@@ -19,6 +19,8 @@ def test_get_recommendations_endpoint(client):
 
 def test_ingest_event_batch_endpoint(client):
     """Test event batch ingestion endpoint."""
+    from app.core import event_buffer  # Rev5: manual flush
+    
     payload = {
         "events": [
             {
@@ -30,7 +32,13 @@ def test_ingest_event_batch_endpoint(client):
         ]
     }
     response = client.post("/api/events/batch", json=payload)
-    assert response.status_code == 201
+    assert response.status_code == 202
     data = response.json()
-    assert data["status"] == "success"
-    assert data["ingested"] == 1
+    # Rev5: async buffer returns "queued" + "accepted"
+    assert data["status"] == "queued"
+    assert data["accepted"] == 1
+    
+    # Manually flush buffer (TestClient doesn't run async background tasks)
+    rows = event_buffer.drain()
+    if rows:
+        event_buffer.bulk_insert_events(rows)

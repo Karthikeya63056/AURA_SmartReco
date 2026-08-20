@@ -8,7 +8,7 @@ from app.schemas.event import EventBatchRequest, ALLOWED_EVENT_TYPES
 from app.models.event import Event
 from app.models.user import User
 from app.core.cache import cache
-from app.services.trigger_engine import TriggerEngine
+from app.core import event_buffer  # Rev5: async event buffer
 from app.dependencies import get_current_user_optional, get_anonymous_user
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ def _check_rate_limit(rate_key: str, event_count: int = 1) -> bool:
     return True
 
 
-@router.post("/batch", status_code=status.HTTP_201_CREATED)
+@router.post("/batch", status_code=status.HTTP_202_ACCEPTED)
 def ingest_event_batch(
     payload: EventBatchRequest,
     request: Request,
@@ -61,11 +61,16 @@ def ingest_event_batch(
 ):
     """
     Ingest a batch of user interaction events.
-    Enforces rate limiting, event-type allowlist, payload size limit,
-    idempotency key deduplication, and evaluates Smart Triggers.
+    
+    Rev5: Returns 202 Accepted immediately, pushes events to async queue.
+    Persistence happens in the background flush loop with conflict-tolerant
+    bulk insert (ON CONFLICT DO NOTHING on idempotency_key).
+    
+    Enforces rate limiting and event-type allowlist.
+    Trigger engine evaluation moved to Phase 3 (dispatcher-based).
     """
     if not payload.events:
-        return {"status": "success", "ingested": 0, "trigger": {"should_run_agent": False}}
+        return {"status": "queued", "accepted": 0}
 
     # Determine user_id: authenticated user, or a per-session anonymous account
     # keyed by the client's session_id so anonymous visitors never share one
@@ -89,50 +94,27 @@ def ingest_event_batch(
             detail="Event rate limit exceeded. Max 100 events per minute."
         )
 
-    # Batch deduplication check via idempotency_keys (eliminates N+1 DB queries)
-    keys = [e.idempotency_key for e in payload.events if e.idempotency_key]
-    existing_keys = set()
-    if keys:
-        existing_rows = db.query(Event.idempotency_key).filter(Event.idempotency_key.in_(keys)).all()
-        existing_keys = {row[0] for row in existing_rows}
-
-    ingested_count = 0
+    # Push events to async queue (non-blocking)
+    # Deduplication handled by buffer's ON CONFLICT DO NOTHING
+    accepted = 0
     for item in payload.events:
         # Defense-in-depth: re-check allowlist (schema already validates)
         if item.event_type not in ALLOWED_EVENT_TYPES:
             logger.warning(f"Rejected disallowed event_type: {item.event_type}")
             continue
 
-        if item.idempotency_key:
-            if item.idempotency_key in existing_keys:
-                continue
-            # Dedupe within this batch too: retried batches may repeat keys.
-            # If we didn't add them here, the UNIQUE constraint on
-            # idempotency_key would raise IntegrityError at commit time.
-            existing_keys.add(item.idempotency_key)
-
-        event_obj = Event(
-            user_id=user_id,
-            session_id=item.session_id,
-            event_type=item.event_type,
-            payload_json=item.payload_json,
-            idempotency_key=item.idempotency_key,
-            created_at=item.created_at
-        )
-        db.add(event_obj)
-        ingested_count += 1
-
-    db.commit()
-
-    # Evaluate Trigger Engine
-    trigger_result = TriggerEngine.evaluate_trigger(
-        db=db,
-        user_id=user_id,
-        current_session_id=session_id
-    )
+        # Push to buffer (returns False if queue full)
+        if event_buffer.push({
+            "user_id": user_id,
+            "session_id": item.session_id,
+            "event_type": item.event_type,
+            "payload_json": item.payload_json,
+            "idempotency_key": item.idempotency_key,
+            "created_at": item.created_at,
+        }):
+            accepted += 1
 
     return {
-        "status": "success",
-        "ingested": ingested_count,
-        "trigger": trigger_result
+        "status": "queued",
+        "accepted": accepted
     }

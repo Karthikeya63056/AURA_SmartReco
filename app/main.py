@@ -2,6 +2,7 @@ import os
 # Suppress ChromaDB telemetry error logs
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
+import asyncio  # Rev5: for flush loop task
 import logging
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
@@ -27,6 +28,7 @@ from app.models.wishlist import WishlistItem
 from app.routers import auth, products, events, recommendations, admin, wishlist
 from app.scheduler.daily_digest import start_scheduler
 from app.services.product_service import list_products
+from app.core import event_buffer  # Rev5: async event buffer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("smartreco")
@@ -240,7 +242,7 @@ def build_signal_counts(db: Session, user_id: int) -> Dict[str, int]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifecycle: create tables, reindex, start scheduler."""
+    """Lifecycle: create tables, reindex, start scheduler, start event buffer."""
     Base.metadata.create_all(bind=engine)
 
     try:
@@ -292,7 +294,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Scheduler start skipped or already active: {str(e)}")
 
+    # Rev5: Start event buffer flush loop (C1 — on app loop)
+    flush_task = asyncio.create_task(event_buffer.flush_loop())
+    logger.info("[Lifespan] Event buffer flush loop started")
+
     yield
+
+    # Rev5: Cancel flush loop on shutdown
+    flush_task.cancel()
+    try:
+        await flush_task
+    except asyncio.CancelledError:
+        pass
+    logger.info("[Lifespan] Event buffer flush loop stopped")
     logger.info("Shutting down SmartReco 2026 application...")
 
 

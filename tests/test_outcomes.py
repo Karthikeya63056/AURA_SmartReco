@@ -1,5 +1,6 @@
 import pytest
-from datetime import datetime, timedelta
+import time
+from datetime import datetime, timedelta, timezone
 from app.models.event import Event
 from app.models.recommendation import Recommendation
 from app.models.user import User
@@ -9,6 +10,8 @@ from app.routers.admin import _compute_recommendation_outcomes
 
 def test_rec_click_and_dismiss_event_ingestion(client, db_session):
     """Test that rec_click and rec_dismiss event types pass batch ingestion validation."""
+    from app.core import event_buffer  # Rev5: manual flush for TestClient
+    
     payload = {
         "events": [
             {
@@ -26,14 +29,22 @@ def test_rec_click_and_dismiss_event_ingestion(client, db_session):
         ]
     }
     response = client.post("/api/events/batch", json=payload)
-    assert response.status_code == 201
+    assert response.status_code == 202
     data = response.json()
-    assert data["status"] == "success"
-    assert data["ingested"] == 2
+    # Rev5: async buffer returns "queued" + "accepted" (not "success" + "ingested")
+    assert data["status"] == "queued"
+    assert data["accepted"] == 2
+    
+    # Manually flush buffer (TestClient doesn't run async background tasks)
+    rows = event_buffer.drain()
+    if rows:
+        event_buffer.bulk_insert_events(rows)
 
 
 def test_compute_recommendation_outcomes(db_session):
     """Test outcome metrics calculation (total recs, clicks, dismisses, CTR)."""
+    now = datetime.now(timezone.utc)
+    
     # Create test user
     user = User(email="outcome_user@example.com", hashed_password="pw", is_admin=True)
     db_session.add(user)
@@ -48,7 +59,7 @@ def test_compute_recommendation_outcomes(db_session):
         quality_score=85,
         trigger_reason="high_intent",
         is_active=True,
-        created_at=datetime.utcnow() - timedelta(minutes=30)
+        created_at=now - timedelta(minutes=30)
     )
     db_session.add(rec)
     db_session.commit()
@@ -60,21 +71,21 @@ def test_compute_recommendation_outcomes(db_session):
         session_id="sess_1",
         event_type="rec_click",
         payload_json={"recommendation_id": rec.id, "product_id": 1},
-        created_at=datetime.utcnow() - timedelta(minutes=20)
+        created_at=now - timedelta(minutes=20)
     )
     e2 = Event(
         user_id=user.id,
         session_id="sess_1",
         event_type="rec_click",
         payload_json={"recommendation_id": rec.id, "product_id": 2},
-        created_at=datetime.utcnow() - timedelta(minutes=15)
+        created_at=now - timedelta(minutes=15)
     )
     e3 = Event(
         user_id=user.id,
         session_id="sess_1",
         event_type="rec_dismiss",
         payload_json={"recommendation_id": rec.id},
-        created_at=datetime.utcnow() - timedelta(minutes=10)
+        created_at=now - timedelta(minutes=10)
     )
     db_session.add_all([e1, e2, e3])
     db_session.commit()
@@ -98,7 +109,7 @@ def test_ignored_recommendations_trigger(db_session):
     db_session.commit()
     db_session.refresh(user)
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     # Create 2 recommendations for user (older than 10m cooldown)
     r1 = Recommendation(
         user_id=user.id,

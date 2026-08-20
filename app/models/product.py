@@ -21,5 +21,9 @@ class Product(Base):
     needs_reindex = Column(Boolean, default=False, nullable=False)
     is_popular = Column(Boolean, default=False, nullable=False)
     is_trending = Column(Boolean, default=False, nullable=False)
+    # Rev5: dual-write provenance. embedding_hash = hash of embedded text;
+    # payload_hash = hash of pushed metadata. Used by outbox reconciler to detect drift.
+    embedding_hash = Column(String(64), nullable=True)
+    payload_hash = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
