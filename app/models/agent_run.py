@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -25,6 +26,8 @@ class AgentRun(Base):
     degraded = Column(Boolean, default=False)
     lease_until = Column(DateTime(timezone=True), nullable=True)
     last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
     user = relationship("User", back_populates="agent_runs")

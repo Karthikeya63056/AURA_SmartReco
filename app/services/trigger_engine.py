@@ -4,12 +4,17 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from app.models.event import Event
 from app.models.product import Product
 from app.models.recommendation import Recommendation
 from app.models.user_profile import UserProfile
+from app.models.user import User
+from app.models.agent_run import AgentRun
 from app.core.cache import cache
+from app.services.signals import build_user_profile
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +57,7 @@ class TriggerEngine:
     ) -> Dict[str, Any]:
         """
         Evaluates trigger conditions in priority order.
-        Returns dict with keys: should_run_agent, trigger_reason, cold_start, products (for cold start).
+        Returns dict with keys: should_run_agent, trigger_reason, cold_start, products (for coldstart).
         """
         # Manual refresh bypasses standard cooldown/behavior guards
         if manual_force:
@@ -239,3 +244,207 @@ class TriggerEngine:
             }
 
         return {"should_run_agent": False, "trigger_reason": "skip", "cold_start": False}
+
+
+# ============================================================
+# Rev5: 5-Gate Trigger Policy + Single-Flight Enqueue (C6)
+# ============================================================
+
+def enqueue_run(
+    db: Session,
+    user_id: int,
+    profile_hash: str,
+    trigger_reason: str,
+) -> Dict[str, Any]:
+    """
+    Attempt single-flight enqueue of an agent run.
+    
+    Uses the partial unique index on agent_runs(user_id) WHERE status IN ('queued','running')
+    to enforce at-most-one in-flight run per user.
+    
+    Returns:
+      {"status": "enqueued", "run_id": int}
+      {"status": "refresh_requested", "run_id": int}
+      {"status": "already_in_flight"}
+    """
+    try:
+        new_run = AgentRun(
+            user_id=user_id,
+            profile_hash=profile_hash,
+            status="queued",
+            trigger_reason=trigger_reason,
+            follow_up_count=0,
+        )
+        db.add(new_run)
+        db.commit()
+        db.refresh(new_run)
+        logger.info(f"[TriggerEngine] Enqueued agent run {new_run.id} for user {user_id}")
+        return {"status": "enqueued", "run_id": new_run.id}
+    except IntegrityError:
+        db.rollback()
+        # Find the active run and mark it for refresh
+        active_run = (
+            db.query(AgentRun)
+            .filter(
+                AgentRun.user_id == user_id,
+                AgentRun.status.in_(["queued", "running"]),
+            )
+            .first()
+        )
+        if active_run:
+            active_run.pending_profile_hash = profile_hash
+            active_run.refresh_requested = True
+            db.commit()
+            logger.info(
+                f"[TriggerEngine] Marked active run {active_run.id} for refresh (user {user_id})"
+            )
+            return {"status": "refresh_requested", "run_id": active_run.id}
+        return {"status": "already_in_flight"}
+
+
+def evaluate_5gate_trigger(
+    db: Session,
+    user_id: int,
+    current_session_id: Optional[str] = None,
+    manual_force: bool = False,
+) -> Dict[str, Any]:
+    """
+    5-gate trigger policy with single-flight enqueue.
+    
+    Gates (evaluated in order):
+      1. min_events >= 5 new since last run
+      2. cooldown >= 90s since last run
+      3. profile_hash changed (vs last completed run)
+      4. daily spend < cap
+      5. user active & not admin
+    
+    If all gates pass, determines trigger reason via existing intent logic,
+    then attempts single-flight enqueue.
+    
+    Returns:
+      {
+        "should_enqueue": bool,
+        "trigger_reason": str,
+        "skip_reasons": list[str],
+        "run_id": int|None,
+        "enqueue_status": str|None,
+        "gates": dict[str, bool]
+      }
+    """
+    from app.config import settings
+    
+    gates_passed: Dict[str, bool] = {}
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return {
+            "should_enqueue": False,
+            "skip_reasons": ["user_not_found"],
+            "gates": gates_passed,
+        }
+    
+    # Gate 5: user active & not admin (check first - cheap)
+    gates_passed["user_active"] = user.is_active and not user.is_admin
+    if not gates_passed["user_active"]:
+        return {
+            "should_enqueue": False,
+            "skip_reasons": ["user_inactive_or_admin"],
+            "gates": gates_passed,
+        }
+    
+    now = datetime.now(timezone.utc)
+    
+    # Last completed run (for cooldown + profile_hash comparison)
+    last_run = (
+        db.query(AgentRun)
+        .filter(AgentRun.user_id == user_id, AgentRun.status == "done")
+        .order_by(AgentRun.created_at.desc())
+        .first()
+    )
+    
+    # Gate 2: cooldown >= 90s
+    cooldown_seconds = getattr(settings, "REC_COOLDOWN_SECONDS", 90)
+    if last_run:
+        last_created = _as_utc(last_run.created_at)
+        elapsed = (now - last_created).total_seconds()
+        gates_passed["cooldown_elapsed"] = elapsed >= cooldown_seconds
+    else:
+        gates_passed["cooldown_elapsed"] = True
+    
+    if not gates_passed["cooldown_elapsed"]:
+        return {
+            "should_enqueue": False,
+            "skip_reasons": ["cooldown_elapsed"],
+            "gates": gates_passed,
+        }
+    
+    # Gate 1: min_events >= 5 new since last run
+    min_events = getattr(settings, "REC_MIN_EVENTS", 5)
+    if last_run:
+        new_events_count = (
+            db.query(Event)
+            .filter(Event.user_id == user_id, Event.created_at > last_run.created_at)
+            .count()
+        )
+    else:
+        new_events_count = db.query(Event).filter(Event.user_id == user_id).count()
+    
+    gates_passed["min_events"] = new_events_count >= min_events
+    if not gates_passed["min_events"]:
+        return {
+            "should_enqueue": False,
+            "skip_reasons": ["min_events"],
+            "gates": gates_passed,
+        }
+    
+    # Gate 3: profile_hash changed
+    profile = build_user_profile(db, user_id, now=now)
+    if last_run and last_run.profile_hash == profile["profile_hash"]:
+        gates_passed["behavior_changed"] = False
+        return {
+            "should_enqueue": False,
+            "skip_reasons": ["behavior_unchanged"],
+            "gates": gates_passed,
+        }
+    gates_passed["behavior_changed"] = True
+    
+    # Gate 4: daily spend < cap (global, since Mesh API budget is shared)
+    budget_usd = getattr(settings, "LLM_DAILY_BUDGET_USD", 1.00)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    daily_spend = (
+        db.query(func.coalesce(func.sum(AgentRun.cost_usd), 0.0))
+        .filter(AgentRun.created_at >= today_start)
+        .scalar()
+    )
+    gates_passed["budget_available"] = daily_spend < budget_usd
+    if not gates_passed["budget_available"]:
+        return {
+            "should_enqueue": False,
+            "skip_reasons": ["budget_exhausted"],
+            "gates": gates_passed,
+        }
+    
+    # All gates passed - determine trigger reason via existing logic
+    intent_result = TriggerEngine.evaluate_trigger(
+        db, user_id, current_session_id, manual_force
+    )
+    if not intent_result.get("should_run_agent"):
+        return {
+            "should_enqueue": False,
+            "skip_reasons": [intent_result.get("trigger_reason", "no_intent")],
+            "trigger_reason": intent_result.get("trigger_reason", "no_intent"),
+            "gates": gates_passed,
+        }
+    
+    trigger_reason = intent_result["trigger_reason"]
+    
+    # Single-flight enqueue
+    enqueue_result = enqueue_run(db, user_id, profile["profile_hash"], trigger_reason)
+    return {
+        "should_enqueue": enqueue_result["status"] == "enqueued",
+        "trigger_reason": trigger_reason,
+        "skip_reasons": [enqueue_result["status"]] if enqueue_result["status"] != "enqueued" else [],
+        "run_id": enqueue_result.get("run_id"),
+        "enqueue_status": enqueue_result["status"],
+        "gates": gates_passed,
+    }
