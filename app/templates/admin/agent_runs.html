@@ -1,0 +1,101 @@
+{% extends "admin/base.html" %}
+{% block title %}Agent Runs — Admin{% endblock %}
+{% block admin_content %}
+<div class="container mt-4">
+    <h2>Agent Runs</h2>
+    <p class="text-muted">All agent runs with skip reasons, deferrals, and cost breakdown.</p>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Total Runs</h5>
+                    <h3>{{ stats.total_runs }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Daily Spend</h5>
+                    <h3>${{ "%.4f"|format(stats.daily_cost_usd) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Total Spend</h5>
+                    <h3>${{ "%.4f"|format(stats.total_cost_usd) }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Status Breakdown</h5>
+                    {% for s, n in stats.by_status.items() %}
+                    <div><span class="badge bg-secondary">{{ s }}</span> {{ n }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <strong>Filter by status:</strong>
+        <a href="/admin/agent-runs" class="btn btn-sm btn-outline-secondary">All</a>
+        {% for s in stats.by_status.keys() %}
+        <a href="/admin/agent-runs?status_filter={{ s }}" class="btn btn-sm btn-outline-secondary">{{ s }}</a>
+        {% endfor %}
+    </div>
+
+    <table class="table table-sm table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>User</th>
+                <th>Status</th>
+                <th>Trigger</th>
+                <th>Skip Reasons</th>
+                <th>Cands</th>
+                <th>Tokens</th>
+                <th>Cost $</th>
+                <th>Latency ms</th>
+                <th>Retries</th>
+                <th>Degraded</th>
+                <th>Refresh</th>
+                <th>Follow-ups</th>
+                <th>Created</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for r in runs %}
+            <tr>
+                <td>{{ r.id }}</td>
+                <td>{{ r.user_id }}</td>
+                <td><span class="badge bg-{% if r.status == 'done' %}success{% elif r.status == 'failed' %}danger{% elif r.status == 'running' %}primary{% else %}warning{% endif %}">{{ r.status }}</span></td>
+                <td>{{ r.trigger_reason or "—" }}</td>
+                <td>
+                    {% if r.skip_reasons %}
+                        {% if r.skip_reasons is string %}{{ r.skip_reasons }}
+                        {% else %}{{ r.skip_reasons|tojson }}{% endif %}
+                    {% else %}—{% endif %}
+                </td>
+                <td>{{ r.candidate_count }}</td>
+                <td>{{ r.tokens or "—" }}</td>
+                <td>{{ "%.4f"|format(r.cost_usd or 0) }}</td>
+                <td>{{ r.latency_ms or "—" }}</td>
+                <td>{{ r.retry_count }}</td>
+                <td>{% if r.degraded %}<span class="badge bg-warning">yes</span>{% else %}no{% endif %}</td>
+                <td>{% if r.refresh_requested %}<span class="badge bg-info">yes</span>{% else %}no{% endif %}</td>
+                <td>{{ r.follow_up_count }}</td>
+                <td>{{ r.created_at.strftime('%m-%d %H:%M') if r.created_at else "—" }}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="14" class="text-center text-muted">No runs yet.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

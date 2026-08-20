@@ -1,3 +1,4 @@
+from app.services.login_lockout import check_lockout, record_failure, record_success
 import logging
 import time
 from datetime import timedelta
@@ -91,10 +92,13 @@ def _create_reset_token(user_id: int) -> str:
 
     Reuses the project's python-jose signer with a namespaced subject
     ("reset:<id>") so it can NEVER double as a login session token —
-    dependencies._user_from_token expects a plain integer subject.
+    dependencies._user_from_token expects a plain integer subject and will
+    reject non-numeric subs. `ver=0` is acceptable here because reset tokens
+    are never resolved to a session user.
     """
     return create_access_token(
         subject=f"reset:{user_id}",
+        token_version=0,
         expires_delta=timedelta(minutes=15),
     )
 
@@ -177,22 +181,42 @@ def login(
             detail="Too many login attempts. Max 5 per minute.",
         )
 
+    # Rev5 G4.2: Check dual-key lockout BEFORE attempting auth
+    email_input = form_data.username.strip().lower()
+    locked, retry_after = check_lockout(client_ip, email_input)
+    if locked:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Account or IP is temporarily locked due to too many failed attempts. Try again in {retry_after // 60} minutes.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     try:
         user = authenticate_user(db, form_data.username, form_data.password)
     except ValueError as e:
         # e.g. deactivated account — distinguishable from bad credentials
+        record_failure(client_ip, email_input)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(e),
         )
     if not user:
+        record_failure(client_ip, email_input)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token = create_access_token(subject=user.id)
+    # Successful auth — clear lockout counters
+    record_success(client_ip, user.email)
+
+    # Rev5 G4.3: embed current token_version as `ver` claim so the token can
+    # be revoked server-side by bumping user.token_version.
+    access_token = create_access_token(
+        subject=user.id,
+        token_version=user.token_version,
+    )
     _set_access_cookie(response, access_token)
 
     return {
@@ -200,10 +224,24 @@ def login(
         "token_type": "bearer",
     }
 
-
 @router.post("/logout")
-def logout(response: Response):
-    """Clear session cookie. Safe to call even if already logged out."""
+def logout(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Clear session cookie AND revoke every other session the user has open.
+
+    Rev5 G4.3: bumping token_version invalidates all JWTs issued before this
+    call — every open tab/device is signed out at once without needing a
+    token store.
+    """
+    # Bump token_version to revoke all existing sessions
+    current_user.token_version = (current_user.token_version or 0) + 1
+    db.commit()
+    logger.info(f"[logout] Revoked all sessions for user #{current_user.id}")
+
     _clear_access_cookie(response)
     return {"status": "ok", "detail": "Logged out"}
 
@@ -287,9 +325,12 @@ def reset_password(
         )
 
     user.hashed_password = get_password_hash(new_password)
+    # Rev5 G4.3: bump token_version so all pre-reset sessions are revoked.
+    # The user must log in again with their new password.
+    user.token_version = (user.token_version or 0) + 1
     db.commit()
 
-    logger.info(f"[reset-password] Password updated for user #{user.id} ({user.email})")
+    logger.info(f"[reset-password] Password updated + all sessions revoked for user #{user.id} ({user.email})")
     return {"status": "ok", "detail": "Password updated successfully."}
 
 

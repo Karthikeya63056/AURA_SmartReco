@@ -10,7 +10,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import decode_access_token, get_password_hash
+from app.core.security import decode_access_token, get_password_hash, verify_token_version
 from app.models.anonymous_session import AnonymousSession
 from app.models.event import Event
 from app.models.recommendation import Recommendation
@@ -56,16 +56,31 @@ def _extract_token(
 
 
 def _user_from_token(db: Session, token: str) -> Optional[User]:
+    """
+    Decode the JWT, load the user, and enforce both deactivation (is_active)
+    and server-side revocation (token_version == JWT `ver` claim).
+
+    Rev5 G4.3: bumping users.token_version instantly invalidates every JWT
+    issued before the bump — no token store needed, no extra queries beyond
+    the single user lookup we already do.
+    """
     payload = decode_access_token(token)
     if not payload or "sub" not in payload:
         return None
     try:
         user_id = int(payload["sub"])
     except (TypeError, ValueError):
+        # Non-numeric subjects (e.g. "reset:123" from password-reset tokens)
+        # must never resolve to a session user.
         return None
     user = db.query(User).filter(User.id == user_id).first()
-    if user and not user.is_active:
-        # Deactivated accounts must not keep using their cookie/bearer session
+    if not user:
+        return None
+    # Deactivated accounts must not keep using their cookie/bearer session
+    if not user.is_active:
+        return None
+    # Rev5 G4.3: `ver` claim must match current token_version
+    if not verify_token_version(payload, user.token_version):
         return None
     return user
 

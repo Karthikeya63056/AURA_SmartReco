@@ -32,6 +32,7 @@ from app.services.product_service import list_products
 from app.core import event_buffer  # Rev5: async event buffer
 from app.services import dispatcher  # Rev5 Phase 3: agent dispatcher
 from app.jobs import stale_run_sweep  # Rev5 Phase 3: stale-run sweep
+from app.core.csrf import CSRFMiddleware
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("smartreco")
@@ -347,6 +348,7 @@ app.add_middleware(
 )
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(MaxBodySizeMiddleware)
+app.add_middleware(CSRFMiddleware)
 
 os.makedirs("app/static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -356,6 +358,8 @@ app.include_router(auth.router)
 app.include_router(products.router)
 app.include_router(events.router)
 app.include_router(recommendations.router)
+from app.routers import recommendations_v2
+app.include_router(recommendations_v2.router)
 app.include_router(admin.router)
 app.include_router(wishlist.router)
 

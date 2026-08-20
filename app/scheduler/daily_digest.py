@@ -13,6 +13,11 @@ from app.models.event import Event
 from app.services.recommendation_service import RecommendationService
 from app.services.email_service import send_daily_digest_email
 from app.services.product_service import get_product
+from app.services.digest import (
+    compute_digest_fingerprint,
+    should_send_digest,
+    record_digest_sent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,11 +53,13 @@ async def _run_daily_digest_body() -> int:
     """
     Core digest logic: find active users, generate recommendations, send emails.
     Skips placeholder/invalid emails so we never mail seed accounts or bounce.
+    Skips duplicate digests via content fingerprint (G4.5).
     """
     logger.info("Starting Daily Digest Job...")
     db: Session = SessionLocal()
     processed_count = 0
     skipped_count = 0
+    duplicate_count = 0
 
     try:
         twenty_four_hours_ago = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -102,12 +109,31 @@ async def _run_daily_digest_body() -> int:
                         for p in products
                     ]
 
+                    # G4.5: Content-fingerprint dedupe.
+                    # Skip identical digests so a user never gets the same email twice in a row.
+                    fingerprint = compute_digest_fingerprint(
+                        uid,
+                        rec_dict.get("product_ids", []),
+                        rec_dict.get("narrative", ""),
+                    )
+                    if not should_send_digest(uid, fingerprint):
+                        logger.info(
+                            f"[Digest] Skipping duplicate digest for user #{uid} "
+                            f"(fp={fingerprint[:12]}...)"
+                        )
+                        duplicate_count += 1
+                        continue
+
                     send_daily_digest_email(
                         user_email=user.email,
                         user_name=user.full_name or user.email.split("@")[0] or "Learner",
                         narrative=rec_dict.get("narrative", ""),
                         courses=courses_data,
                     )
+
+                    # Record fingerprint so next run can dedupe against this send
+                    record_digest_sent(uid, fingerprint)
+
                     processed_count += 1
                     logger.info(f"[Digest] Sent email to {user.email} (user #{uid})")
                 except Exception as user_err:
@@ -118,7 +144,10 @@ async def _run_daily_digest_body() -> int:
 
         logger.info(
             f"Completed Daily Digest Job. "
-            f"Processed={processed_count}, Skipped={skipped_count}, Total={len(user_ids)}."
+            f"Processed={processed_count}, "
+            f"Skipped (non-sendable)={skipped_count}, "
+            f"Duplicates (G4.5)={duplicate_count}, "
+            f"Total={len(user_ids)}."
         )
         return processed_count
     except Exception as e:

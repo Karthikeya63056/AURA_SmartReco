@@ -1,18 +1,23 @@
 import logging
 from typing import Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
-from sqlalchemy.orm import Session
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request, Query
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from starlette.responses import RedirectResponse
 from starlette.concurrency import run_in_threadpool
+from sqlalchemy.orm import Session
 
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, get_db
 from app.core.cache import cache
-from app.dependencies import get_admin_user
+from app.dependencies import get_admin_user, get_current_user_optional
 from app.models.user import User
 from app.models.recommendation import Recommendation
 from app.models.user_profile import UserProfile
 from app.models.event import Event
 
 logger = logging.getLogger(__name__)
+templates = Jinja2Templates(directory="app/templates")
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -211,3 +216,108 @@ async def get_recommendation_outcomes(
     """
     outcomes = await run_in_threadpool(_compute_recommendation_outcomes)
     return outcomes
+
+
+# ============================================================
+# Rev5 Phase 4: Agent Runs observability
+# ============================================================
+from app.models.agent_run import AgentRun
+from sqlalchemy import func, desc
+import json as _json
+
+
+def _compute_agent_run_stats(db: Session) -> dict:
+    """Aggregate stats for the agent runs dashboard."""
+    total_runs = db.query(AgentRun).count()
+    by_status = {
+        row[0]: row[1]
+        for row in db.query(AgentRun.status, func.count(AgentRun.id))
+        .group_by(AgentRun.status)
+        .all()
+    }
+    by_trigger = {
+        row[0] or "(none)": row[1]
+        for row in db.query(AgentRun.trigger_reason, func.count(AgentRun.id))
+        .group_by(AgentRun.trigger_reason)
+        .all()
+    }
+    total_cost = (
+        db.query(func.coalesce(func.sum(AgentRun.cost_usd), 0.0)).scalar() or 0.0
+    )
+    today_start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    daily_cost = (
+        db.query(func.coalesce(func.sum(AgentRun.cost_usd), 0.0))
+        .filter(AgentRun.created_at >= today_start)
+        .scalar() or 0.0
+    )
+    return {
+        "total_runs": total_runs,
+        "by_status": by_status,
+        "by_trigger": by_trigger,
+        "total_cost_usd": round(total_cost, 4),
+        "daily_cost_usd": round(daily_cost, 4),
+    }
+
+
+@router.get("/agent-runs", response_class=HTMLResponse)
+def page_admin_agent_runs(
+    request: Request,
+    status_filter: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+    user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Admin: agent run list with skip reasons, deferrals, cost."""
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    if not user.is_admin:
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    query = db.query(AgentRun).order_by(desc(AgentRun.created_at))
+    if status_filter:
+        query = query.filter(AgentRun.status == status_filter)
+    runs = query.limit(200).all()
+
+    # Parse JSON fields for display
+    display_runs = []
+    for r in runs:
+        try:
+            skip_reasons = _json.loads(r.skip_reasons_json) if r.skip_reasons_json else None
+        except Exception:
+            skip_reasons = r.skip_reasons_json
+        try:
+            scores = _json.loads(r.candidate_scores_json) if r.candidate_scores_json else None
+        except Exception:
+            scores = r.candidate_scores_json
+        display_runs.append({
+            "id": r.id,
+            "user_id": r.user_id,
+            "status": r.status,
+            "trigger_reason": r.trigger_reason,
+            "skip_reasons": skip_reasons,
+            "candidate_count": len(scores) if isinstance(scores, list) else 0,
+            "model_used": r.model_used,
+            "tokens": r.tokens,
+            "cost_usd": r.cost_usd,
+            "latency_ms": r.latency_ms,
+            "retry_count": r.retry_count,
+            "degraded": r.degraded,
+            "refresh_requested": r.refresh_requested,
+            "follow_up_count": r.follow_up_count,
+            "last_error": r.last_error,
+            "created_at": r.created_at,
+        })
+
+    stats = _compute_agent_run_stats(db)
+
+    return templates.TemplateResponse(
+        "admin/agent_runs.html",
+        {
+            "request": request,
+            "user": user,
+            "runs": display_runs,
+            "stats": stats,
+            "status_filter": status_filter,
+        },
+    )
