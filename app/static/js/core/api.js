@@ -36,6 +36,19 @@
   }
 
   /**
+   * CSRF token from the csrf_token cookie (set by the backend).
+   * Sent as X-CSRF-Token on mutating requests.
+   */
+  function getCsrfToken() {
+    try {
+      const m = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
    * @param {string} url
    * @param {RequestInit & { json?: any, formData?: FormData }} options
    * @returns {Promise<{ ok: boolean, status: number, data: any, response: Response }>}
@@ -64,6 +77,11 @@
       // Let browser set multipart boundary — do not set Content-Type
       body = formData;
       delete finalHeaders['Content-Type'];
+    }
+
+    // Mutating requests carry the CSRF token unless one was passed explicitly
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase()) && !finalHeaders['X-CSRF-Token']) {
+      finalHeaders['X-CSRF-Token'] = getCsrfToken() || '';
     }
 
     const response = await fetch(url, {

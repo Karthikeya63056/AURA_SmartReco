@@ -10,7 +10,7 @@ This frees the partial-unique single-flight slot so a crashed run
 can never wedge a user forever. C5: opens its own session.
 """
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import update
 
@@ -20,6 +20,8 @@ from app.models.agent_run import AgentRun
 logger = logging.getLogger(__name__)
 
 SWEEP_INTERVAL_SECONDS = 60
+STALE_QUEUED_MINUTES = 5
+STALE_QUEUED_CAP = 50
 
 _scheduler = None
 
@@ -41,6 +43,37 @@ def sweep_stale_runs() -> int:
         reclaimed = result.rowcount
         if reclaimed:
             logger.info(f"[sweep] reclaimed {reclaimed} stale run(s)")
+
+        # #22: re-enqueue queued runs orphaned by a crash before the loop
+        # started or by a full job queue (submit_run_sync left them 'queued').
+        try:
+            from app.services import dispatcher  # avoid circular import
+
+            stale_queued = (
+                session.query(AgentRun)
+                .filter(
+                    AgentRun.status == "queued",
+                    AgentRun.created_at < now - timedelta(minutes=STALE_QUEUED_MINUTES),
+                )
+                .order_by(AgentRun.created_at.asc())
+                .limit(STALE_QUEUED_CAP)
+                .all()
+            )
+            for run in stale_queued:
+                try:
+                    dispatcher.submit_run_sync(run.id)
+                except Exception as e:
+                    logger.warning(
+                        f"[sweep] re-enqueue failed for run {run.id}: {e}"
+                    )
+            if stale_queued:
+                logger.info(
+                    f"[sweep] attempted re-enqueue of {len(stale_queued)} "
+                    f"stale queued run(s)"
+                )
+        except Exception as e:
+            logger.warning(f"[sweep] queued-run re-enqueue skipped: {e}")
+
         return reclaimed
 
 

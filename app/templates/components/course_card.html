@@ -54,7 +54,7 @@
   <div class="course-footer" style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
     <span class="course-price">
       {% if course.price and course.price > 0 %}
-        ${{ '%.0f'|format(course.price) }}
+        ${{ ('%.2f'|format(course.price)).rstrip('0').rstrip('.') }}
       {% else %}
         Free
       {% endif %}

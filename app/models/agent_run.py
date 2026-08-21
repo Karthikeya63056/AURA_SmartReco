@@ -1,11 +1,19 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, Text, ForeignKey, Index, text
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
 class AgentRun(Base):
     __tablename__ = "agent_runs"
+    __table_args__ = (
+        Index(
+            "uq_single_flight",
+            "user_id",
+            unique=True,
+            sqlite_where=text("status IN ('queued', 'running')"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)

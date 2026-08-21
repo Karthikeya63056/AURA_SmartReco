@@ -25,8 +25,8 @@ class ProductUpdate(BaseModel):
     title: Optional[str] = None
     category: Optional[str] = None
     level: Optional[str] = None
-    price: Optional[float] = None
-    rating: Optional[float] = None
+    price: Optional[float] = Field(default=None, ge=0.0)
+    rating: Optional[float] = Field(default=None, ge=0.0, le=5.0)
     description: Optional[str] = None
     tags: Optional[List[str]] = None
     syllabus: Optional[List[str]] = None

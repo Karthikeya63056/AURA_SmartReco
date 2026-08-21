@@ -6,16 +6,8 @@
   'use strict';
 
   function init() {
-    const deleteBtns = document.querySelectorAll('[data-admin-delete]');
-    deleteBtns.forEach(function (btn) {
-      btn.addEventListener('click', function (e) {
-        const title = btn.dataset.title || 'this product';
-        if (!window.confirm('Delete "' + title + '"? This cannot be undone.')) {
-          e.preventDefault();
-          return;
-        }
-      });
-    });
+    // NOTE: delete confirmation lives with the page-level script that actually
+    // performs the delete (admin/products.html) — do not add a second confirm here.
 
     // Toast on query flags e.g. ?saved=1
     try {

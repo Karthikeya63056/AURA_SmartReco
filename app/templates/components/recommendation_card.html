@@ -21,7 +21,6 @@
     <button type="button"
             class="rec-dismiss-btn"
             title="Not interested"
-            onclick="handleRecommendationDismiss(this)"
             data-recommendation-id="{{ rec_id }}">✕</button>
     {% endif %}
   </div>
@@ -47,8 +46,7 @@
       <a href="/course/{{ pids[0] }}"
          class="rec-primary-btn"
          data-recommendation-id="{{ rec_id }}"
-         data-product-id="{{ pids[0] }}"
-         onclick="handleRecommendationClick(this)">
+         data-product-id="{{ pids[0] }}">
         View course
         <span class="arrow">→</span>
       </a>
@@ -66,8 +64,7 @@
         <a href="/course/{{ pid }}"
            class="rec-secondary-btn"
            data-recommendation-id="{{ rec_id }}"
-           data-product-id="{{ pid }}"
-           onclick="handleRecommendationClick(this)">
+           data-product-id="{{ pid }}">
           View course
         </a>
         {% set idx = loop.index0 + 1 %}
@@ -94,25 +91,60 @@
 </div>
 
 <script>
-function handleRecommendationClick(el) {
-  var recId = el.getAttribute('data-recommendation-id');
-  var prodId = el.getAttribute('data-product-id');
-  if (window.trackRecommendationClick) {
-    window.trackRecommendationClick(recId, prodId);
-  }
-}
+(function () {
+  'use strict';
 
-function handleRecommendationDismiss(el) {
-  var recId = el.getAttribute('data-recommendation-id');
-  if (window.trackRecommendationDismiss) {
-    window.trackRecommendationDismiss(recId);
+  function handleRecommendationClick(el) {
+    var recId = el.getAttribute('data-recommendation-id');
+    var prodId = el.getAttribute('data-product-id');
+    if (window.trackRecommendationClick) {
+      window.trackRecommendationClick(recId, prodId);
+    }
   }
-  var card = el.closest('.rec-side-card');
-  if (card) {
-    card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-    card.style.opacity = '0';
-    card.style.transform = 'translateY(-8px)';
-    setTimeout(function() { card.style.display = 'none'; }, 300);
+
+  function handleRecommendationDismiss(el) {
+    var recId = el.getAttribute('data-recommendation-id');
+    if (window.trackRecommendationDismiss) {
+      window.trackRecommendationDismiss(recId);
+    }
+    // Tell the backend so this recommendation is not regenerated
+    fetch('/api/recommendations/dismiss/' + recId, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'X-CSRF-Token': (document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/) || [])[1] || ''
+      }
+    }).catch(function () {});
+    var card = el.closest('.rec-side-card');
+    if (card) {
+      card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(-8px)';
+      setTimeout(function () { card.style.display = 'none'; }, 300);
+    }
   }
-}
+
+  // Kept global for backward compatibility with older inline callers
+  window.handleRecommendationClick = handleRecommendationClick;
+  window.handleRecommendationDismiss = handleRecommendationDismiss;
+
+  function bindRecommendationCard() {
+    document.querySelectorAll('.rec-dismiss-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () { handleRecommendationDismiss(btn); });
+    });
+    document.querySelectorAll('.rec-primary-btn, .rec-secondary-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () { handleRecommendationClick(btn); });
+    });
+  }
+
+  // Bind once even if the component is included multiple times on a page
+  if (!window.__auraRecCardBound) {
+    window.__auraRecCardBound = true;
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bindRecommendationCard);
+    } else {
+      bindRecommendationCard();
+    }
+  }
+})();
 </script>

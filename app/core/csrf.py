@@ -18,6 +18,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
 CSRF_COOKIE_NAME = "csrf_token"
@@ -49,6 +51,19 @@ def _has_bearer_auth(request: Request) -> bool:
     return auth_header.lower().startswith("bearer ")
 
 
+def _set_csrf_cookie(response: Response, token: str) -> None:
+    """Attach the CSRF cookie (JS-readable, NOT HttpOnly)."""
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME,
+        value=token,
+        httponly=False,  # JS must read this to send it back
+        secure=not getattr(settings, "DEBUG", True),
+        samesite="lax",
+        max_age=86400 * 30,  # 30 days
+        path="/",
+    )
+
+
 class CSRFMiddleware(BaseHTTPMiddleware):
     """
     CSRF protection middleware.
@@ -73,24 +88,20 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     f"[CSRF] Rejected {request.method} {request.url.path} "
                     f"from {request.client.host if request.client else 'unknown'}"
                 )
-                return JSONResponse(
+                response = JSONResponse(
                     status_code=403,
                     content={"detail": "CSRF validation failed. Include X-CSRF-Token header matching the csrf_token cookie."},
                 )
+                # Rejected clients still receive a fresh cookie so they can retry
+                if CSRF_COOKIE_NAME not in request.cookies:
+                    _set_csrf_cookie(response, cookie_token)
+                return response
 
         # Continue to the endpoint
         response = await call_next(request)
 
         # Set the CSRF cookie on the response (if not already set)
         if CSRF_COOKIE_NAME not in request.cookies:
-            response.set_cookie(
-                key=CSRF_COOKIE_NAME,
-                value=cookie_token,
-                httponly=False,  # JS must read this to send it back
-                secure=not getattr(request.app.state, "debug", True),
-                samesite="lax",
-                max_age=86400 * 30,  # 30 days
-                path="/",
-            )
+            _set_csrf_cookie(response, cookie_token)
 
         return response

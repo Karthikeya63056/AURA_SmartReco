@@ -102,7 +102,7 @@
           <td>{{ p.category }}</td>
           <td>{{ p.level }}</td>
           <td class="mono">
-            {% if p.price %}${{ '%.0f'|format(p.price) }}{% else %}Free{% endif %}
+            {% if p.price %}${{ ('%.2f'|format(p.price)).rstrip('0').rstrip('.') }}{% else %}Free{% endif %}
           </td>
           <td>
             {% if p.is_popular %}<span class="badge badge-cyan">Popular</span>{% endif %}

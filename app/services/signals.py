@@ -21,15 +21,22 @@ EVENT_WEIGHTS = {
     "search": 0.10,
     "course_click": 0.08,
     "wishlist": 0.30,
+    "wishlist_remove": -0.20,
     "syllabus_view": 0.15,
     "faq_expand": 0.03,
     "rec_click": 0.05,
     "rec_dismiss": -0.40,  # Negative signal
     "not_interested": -0.65,  # Strongest negative signal
+    "enroll_preview": 0.35,
+    "course_impression": 0.01,
+    "instructor_view": 0.08,
+    "share": 0.12,
+    "time_on_page": 0.0,  # Explicit zero: counted as evidence, not scored
 }
 
 # Dwell time bonus: ≥15s on a page scales weight by up to 2x
-DWEll_BONUS_THRESHOLD_SECONDS = 15
+DWELL_BONUS_THRESHOLD_SECONDS = 15
+DWEll_BONUS_THRESHOLD_SECONDS = DWELL_BONUS_THRESHOLD_SECONDS  # backward-compat alias (#84)
 DWELL_BONUS_MAX_MULTIPLIER = 2.0
 
 # Exponential decay: 72-hour half-life
@@ -116,12 +123,19 @@ def build_user_profile(
         weight = EVENT_WEIGHTS[event_type]
         decay = recency_decay(event.created_at, now)
         
-        # Dwell time bonus (if payload has dwell_seconds)
+        # Dwell time bonus (if payload has dwell_seconds) — defensive parsing (#9)
         payload = event.payload_json if isinstance(event.payload_json, dict) else {}
-        dwell_seconds = payload.get("dwell_seconds", 0)
-        if dwell_seconds >= DWEll_BONUS_THRESHOLD_SECONDS and weight > 0:
+        raw_dwell = payload.get("dwell_seconds", 0)
+        if isinstance(raw_dwell, (int, float)) and not isinstance(raw_dwell, bool):
+            dwell_seconds = raw_dwell
+        else:
+            try:
+                dwell_seconds = float(raw_dwell)
+            except (TypeError, ValueError):
+                dwell_seconds = 0
+        if dwell_seconds >= DWELL_BONUS_THRESHOLD_SECONDS and weight > 0:
             # Scale bonus linearly from 1.0 (at threshold) to max (at 60s+)
-            bonus = min(DWELL_BONUS_MAX_MULTIPLIER, 1.0 + (dwell_seconds - DWEll_BONUS_THRESHOLD_SECONDS) / 45.0)
+            bonus = min(DWELL_BONUS_MAX_MULTIPLIER, 1.0 + (dwell_seconds - DWELL_BONUS_THRESHOLD_SECONDS) / 45.0)
             weight *= bonus
         
         # Apply decay to weight
@@ -157,7 +171,10 @@ def build_user_profile(
         if event_type in ("rec_dismiss", "not_interested"):
             product_id = payload.get("product_id") or payload.get("course_id")
             if product_id is not None:
-                excluded_product_ids.add(int(product_id))
+                try:
+                    excluded_product_ids.add(int(product_id))
+                except (TypeError, ValueError):
+                    pass
         
         # Track evidence
         evidence_event_ids.append(event.id)

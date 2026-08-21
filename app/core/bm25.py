@@ -119,13 +119,15 @@ def search(query: str, k: int = 20) -> List[Tuple[int, float]]:
     Returns:
         List of (product_id, score) tuples, sorted by score descending
     """
-    global _bm25_index
-    
-    # Lazy-build index on first search
-    if _bm25_index is None:
+    # Snapshot the index under the lock so a concurrent rebuild can't
+    # desync scores from their product IDs mid-search.
+    with _index_lock:
+        index, ids = _bm25_index, list(_product_ids)
+    if index is None:
         build_index()
-    
-    if _bm25_index is None:
+        with _index_lock:
+            index, ids = _bm25_index, list(_product_ids)
+    if index is None:
         return []
     
     # Tokenize query
@@ -134,10 +136,10 @@ def search(query: str, k: int = 20) -> List[Tuple[int, float]]:
         return []
     
     # Get BM25 scores for all documents
-    scores = _bm25_index.get_scores(query_tokens)
+    scores = index.get_scores(query_tokens)
     
     # Pair scores with product IDs and sort
-    scored = list(zip(_product_ids, scores))
+    scored = list(zip(ids, scores))
     scored.sort(key=lambda x: x[1], reverse=True)
     
     # Return top k (filter out zero scores)

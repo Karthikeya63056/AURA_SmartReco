@@ -1,5 +1,6 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import Column, Integer, DateTime, ForeignKey, UniqueConstraint
-from sqlalchemy.sql import func
 
 from app.core.database import Base
 
@@ -13,4 +14,4 @@ class WishlistItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
-    created_at = Column(DateTime, server_default=func.now())
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)

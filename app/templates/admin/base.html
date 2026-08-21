@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AURA — Adaptive User Recommendation Agent. Personalized course recommendations powered by LangGraph and Mesh API.">
+  <title>{% block title %}AURA{% endblock %} — Adaptive User Recommendation Agent</title>
+
+  <!-- Design system -->
+  <link rel="stylesheet" href="/static/css/tokens.css">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/components.css">
+  <link rel="stylesheet" href="/static/css/pages.css">
+
+  {% block head %}{% endblock %}
+</head>
+<body>
+  {% include "components/nav.html" %}
+
+  <main>
+    {% block admin_content %}{% endblock %}
+  </main>
+
+  {% include "components/footer.html" %}
+  {% include "components/toast.html" %}
+
+  <!-- 1. Load Markdown & Sanitizer FIRST (Synchronously, before core JS) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+
+  <!-- 2. Core JS (order matters) -->
+  <script src="/static/js/core/api.js"></script>
+  <script src="/static/js/core/auth.js"></script>
+  <script src="/static/js/core/ui.js"></script>
+  <script src="/static/js/tracking/tracker.js"></script>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

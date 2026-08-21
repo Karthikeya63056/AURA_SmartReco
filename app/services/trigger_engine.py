@@ -105,17 +105,19 @@ class TriggerEngine:
                 "products": popular_courses,
             }
 
-        # Fetch top 20 recent events for hash & intent analysis
+        # Fetch top 200 recent events (desc) — wide window so the 15-minute
+        # intent scan (#63) sees bursts larger than 20 events
         recent_events = (
             db.query(Event)
             .filter(Event.user_id == user_id)
             .order_by(Event.created_at.desc())
-            .limit(20)
+            .limit(200)
             .all()
         )
 
         # Behavior hash: skip if nothing meaningful changed since last active rec
-        current_hash = compute_behavior_hash(recent_events)
+        # (hash semantics preserved: newest 20 events only)
+        current_hash = compute_behavior_hash(recent_events[:20])
         user_profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
         if (
             user_profile

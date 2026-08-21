@@ -18,6 +18,8 @@
   const BATCH_FLUSH_INTERVAL_MS = 5000;
   const MAX_QUEUE_SIZE = 20;
   const SESSION_KEY = 'smartreco_session_id';
+  // Backend caps each batch at 50 events — never send/re-queue more per flush.
+  const MAX_BATCH_SIZE = 50;
   // Rotate the session after this much idle time. The trigger engine counts
   // events per session (>= 5 → agent run); an ever-lasting session id would
   // turn that threshold into a lifetime counter and fire the LLM agent forever.
@@ -25,7 +27,7 @@
 
   let queue = [];
   let sessionId = getOrCreateSessionId();
-  let pageStartTime = Date.now();
+  let lastVisibleTime = Date.now();
   let flushTimer = null;
   let started = false;
   const impressedCourseIds = new Set();
@@ -122,26 +124,37 @@
     touchSession();
 
     const eventsToSend = queue.splice(0, queue.length);
-    const body = JSON.stringify({ events: eventsToSend });
+
+    // Backend caps batch size — split oversized queues into sequential chunks
+    const chunks = [];
+    for (let i = 0; i < eventsToSend.length; i += MAX_BATCH_SIZE) {
+      chunks.push(eventsToSend.slice(i, i + MAX_BATCH_SIZE));
+    }
 
     if (isUnload && typeof navigator.sendBeacon === 'function') {
+      // Only beacon the first 50; re-queue the rest (pagehide may not be final,
+      // e.g. bfcache) so nothing is silently dropped.
       try {
-        const blob = new Blob([body], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify({ events: chunks[0] })], { type: 'application/json' });
         navigator.sendBeacon(ENDPOINT, blob);
       } catch (e) {
         console.warn('[SmartTracker] sendBeacon failed', e);
       }
+      const rest = chunks.slice(1).reduce(function (acc, c) { return acc.concat(c); }, []);
+      if (rest.length > 0) {
+        queue = rest.concat(queue);
+      }
       return;
     }
 
-    const send = function () {
+    const sendChunk = function (chunk) {
       if (global.AURA_API && typeof global.AURA_API.postEvents === 'function') {
-        return global.AURA_API.postEvents(eventsToSend);
+        return global.AURA_API.postEvents(chunk);
       }
       return fetch(ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: body,
+        body: JSON.stringify({ events: chunk }),
         credentials: 'include',
         keepalive: true,
       }).then(function (res) {
@@ -154,19 +167,30 @@
       });
     };
 
-    send()
-      .then(function (result) {
+    // Send sequentially; on failure, re-queue whatever never made it
+    const pending = chunks.slice();
+    const sendNext = function () {
+      const chunk = pending.shift();
+      if (!chunk) return Promise.resolve();
+      return sendChunk(chunk).then(function (result) {
         const data = result && result.data ? result.data : result;
         if (data && data.trigger) {
           maybeRefreshRecommendations(data.trigger);
         }
-      })
-      .catch(function (err) {
-        console.warn('[SmartTracker] flush error', err);
-        if (queue.length < 100) {
-          queue = eventsToSend.concat(queue).slice(0, 100);
-        }
+        return sendNext();
+      }).catch(function (err) {
+        pending.unshift(chunk);
+        throw err;
       });
+    };
+
+    sendNext().catch(function (err) {
+      console.warn('[SmartTracker] flush error', err);
+      const unsent = pending.reduce(function (acc, c) { return acc.concat(c); }, []);
+      if (unsent.length > 0 && queue.length < MAX_BATCH_SIZE) {
+        queue = unsent.concat(queue).slice(0, MAX_BATCH_SIZE);
+      }
+    });
   }
 
   function track(eventType, payload, idempotencyKey) {
@@ -316,14 +340,17 @@
 
   function bindUnload() {
     document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState !== 'hidden') return;
-
-      const seconds = Math.round((Date.now() - pageStartTime) / 1000);
-      track('time_on_page', {
-        url: window.location.pathname,
-        time_spent_seconds: seconds,
-      });
-      flush(true);
+      if (document.visibilityState === 'hidden') {
+        // Send only the delta since the page last became visible
+        const seconds = Math.round((Date.now() - lastVisibleTime) / 1000);
+        track('time_on_page', {
+          url: window.location.pathname,
+          time_spent_seconds: seconds,
+        });
+        flush(true);
+      } else if (document.visibilityState === 'visible') {
+        lastVisibleTime = Date.now();
+      }
     });
 
     window.addEventListener('pagehide', function () {

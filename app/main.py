@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request, Depends, status, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -42,8 +42,13 @@ logger = logging.getLogger("smartreco")
 # Security Headers Middleware (Bug #10)
 # ============================================================
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    # Authenticated/dynamic routes must never be cached by browsers or proxies
+    _NO_STORE_PREFIXES = ("/auth", "/api", "/dashboard", "/profile", "/admin", "/wishlist")
+
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
+        if request.url.path.startswith(self._NO_STORE_PREFIXES):
+            response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
@@ -244,6 +249,17 @@ def build_signal_counts(db: Session, user_id: int) -> Dict[str, int]:
     return counts
 
 
+def _try_alter(conn, ddl: str, description: str) -> None:
+    """Run a best-effort ALTER TABLE; log success, swallow 'already exists' errors."""
+    try:
+        conn.execute(text(ddl))
+        conn.commit()
+        logger.info(f"Migrated schema: {description}")
+    except Exception:
+        # Column already exists or table freshly created
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifecycle: create tables, reindex, start scheduler, start event buffer, start dispatcher + sweep."""
@@ -252,35 +268,18 @@ async def lifespan(app: FastAPI):
     try:
         from sqlalchemy import text
         with engine.connect() as conn:
-            try:
-                conn.execute(text("ALTER TABLE recommendations ADD COLUMN product_reasons JSON"))
-                conn.commit()
-                logger.info("Migrated recommendations table: added product_reasons column.")
-            except Exception:
-                pass
-
-            try:
-                conn.execute(text("ALTER TABLE products ADD COLUMN prerequisites JSON"))
-                conn.commit()
-                logger.info("Migrated products table: added prerequisites column.")
-            except Exception:
-                pass
-
-            try:
-                conn.execute(text("ALTER TABLE products ADD COLUMN skills_taught JSON"))
-                conn.commit()
-                logger.info("Migrated products table: added skills_taught column.")
-            except Exception:
-                pass
-
-            try:
-                conn.execute(text("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1 NOT NULL"))
-                conn.commit()
-                logger.info("Migrated users table: added is_active column.")
-            except Exception:
-                pass
+            _try_alter(conn, "ALTER TABLE recommendations ADD COLUMN product_reasons JSON",
+                       "added recommendations.product_reasons column")
+            _try_alter(conn, "ALTER TABLE products ADD COLUMN prerequisites JSON",
+                       "added products.prerequisites column")
+            _try_alter(conn, "ALTER TABLE products ADD COLUMN skills_taught JSON",
+                       "added products.skills_taught column")
+            _try_alter(conn, "ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1 NOT NULL",
+                       "added users.is_active column")
+            _try_alter(conn, "ALTER TABLE users ADD COLUMN password_changed_at TIMESTAMP",
+                       "added users.password_changed_at column")
     except Exception:
-        # Columns already exist or tables freshly created
+        # Tables could not be altered at all
         pass
 
     try:
@@ -292,11 +291,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Startup reindex failed (will retry on next boot): {e}")
 
-    logger.info("Starting APScheduler Daily Digest Background Job...")
-    try:
-        start_scheduler()
-    except Exception as e:
-        logger.warning(f"Scheduler start skipped or already active: {str(e)}")
+    testing = getattr(settings, "TESTING", False)
+
+    if not testing:
+        logger.info("Starting APScheduler Daily Digest Background Job...")
+        try:
+            start_scheduler()
+        except Exception as e:
+            logger.warning(f"Scheduler start skipped or already active: {str(e)}")
 
     # Rev5: Start event buffer flush loop (C1 — on app loop)
     flush_task = asyncio.create_task(event_buffer.flush_loop())
@@ -305,9 +307,26 @@ async def lifespan(app: FastAPI):
     # Rev5 Phase 3: Start dispatcher loop + stale-run sweep
     dispatcher_task = dispatcher.start()
     logger.info("[Lifespan] Agent dispatcher loop started")
-    stale_run_sweep.start_sweep_scheduler()
+
+    if not testing:
+        stale_run_sweep.start_sweep_scheduler()
+
+        try:
+            recovered = dispatcher.recover_orphaned_runs()
+            if recovered:
+                logger.info(f"[Lifespan] Recovered {recovered} orphaned agent run(s)")
+        except Exception as e:
+            logger.warning(f"[Lifespan] Run recovery failed: {e}")
 
     yield
+
+    # Rev5: Drain pending events before cancelling the flush loop (shutdown safety)
+    try:
+        for _ in range(40):
+            if await event_buffer.drain_once() == 0:
+                break
+    except Exception as e:
+        logger.warning(f"[Lifespan] Final event drain failed: {e}")
 
     # Rev5: Cancel flush loop + dispatcher, stop sweep on shutdown
     flush_task.cancel()
@@ -692,7 +711,7 @@ def page_admin_dashboard(
 
     # Compute recommendation outcome metrics
     from app.routers.admin import _compute_recommendation_outcomes
-    outcomes = _compute_recommendation_outcomes()
+    outcomes = _compute_recommendation_outcomes(db)
 
     return templates.TemplateResponse(
         request,
@@ -783,6 +802,9 @@ def page_admin_trace(
 
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc):
+    # API/auth clients get JSON errors, browsers get the HTML page
+    if request.url.path.startswith(("/api/", "/auth/")):
+        return JSONResponse({"detail": "Not found"}, status_code=404)
     return templates.TemplateResponse(
         request,
         "pages/404.html",
@@ -794,6 +816,9 @@ async def not_found_handler(request: Request, exc):
 @app.exception_handler(500)
 async def server_error_handler(request: Request, exc):
     logger.exception("Unhandled server error: %s", exc)
+    # API/auth clients get JSON errors, browsers get the HTML page
+    if request.url.path.startswith(("/api/", "/auth/")):
+        return JSONResponse({"detail": "Internal server error"}, status_code=500)
     return templates.TemplateResponse(
         request,
         "pages/500.html",
@@ -808,4 +833,4 @@ async def server_error_handler(request: Request, exc):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=settings.DEBUG)

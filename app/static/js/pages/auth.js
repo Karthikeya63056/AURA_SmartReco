@@ -15,7 +15,14 @@
 
   function safeNextPath() {
     const next = getQueryParam('next');
-    if (next && next.startsWith('/') && !next.startsWith('//')) {
+    if (
+      next &&
+      next.startsWith('/') &&
+      !next.startsWith('//') &&
+      !next.includes('\\') &&
+      !/[\r\n\t]/.test(next) &&
+      next !== '/'
+    ) {
       return next;
     }
     return '/dashboard';

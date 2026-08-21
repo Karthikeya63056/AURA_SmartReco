@@ -62,3 +62,34 @@ def toggle_wishlist(
         .count()
     )
     return {"added": added, "count": count}
+
+
+@router.delete("/{product_id}")
+def remove_from_wishlist(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Explicit removal (distinct from the toggle POST)."""
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sign in to manage your wishlist",
+        )
+
+    deleted = (
+        db.query(WishlistItem)
+        .filter(
+            WishlistItem.user_id == current_user.id,
+            WishlistItem.product_id == product_id,
+        )
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not in wishlist",
+        )
+
+    return {"status": "removed", "product_id": product_id, "added": False}

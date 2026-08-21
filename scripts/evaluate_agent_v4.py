@@ -37,7 +37,6 @@ Usage:
   python scripts/evaluate_agent_v4.py                    # Full evaluation
   python scripts/evaluate_agent_v4.py --quick            # Skip LLM judge
   python scripts/evaluate_agent_v4.py --runs 3           # Multiple runs for variance
-  python scripts/evaluate_agent_v4.py --baseline         # Include baseline comparisons
   python scripts/evaluate_agent_v4.py --compare report1.json report2.json  # A/B test
 """
 
@@ -66,6 +65,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.core.database import SessionLocal
+from app.core.security import get_password_hash
 from app.models.user import User
 from app.models.event import Event
 from app.models.product import Product
@@ -362,7 +362,7 @@ def create_or_reset_test_user(db, persona_name: str) -> User:
         user = User(
             email=email,
             full_name=f"Eval User ({persona_name})",
-            hashed_password="evalpassword123",
+            hashed_password=get_password_hash("evalpassword123"),
             is_admin=False,
         )
         db.add(user)
@@ -688,12 +688,11 @@ def compute_percentiles(values: List[float]) -> Dict[str, float]:
 def run_evaluation(
     quick: bool = False,
     num_runs: int = 1,
-    include_baselines: bool = False,
     k: int = 5
 ) -> Dict[str, Any]:
     """Run comprehensive evaluation with statistical rigor."""
     logger.info("Starting AURA SmartReco Comprehensive Evaluation Framework (v4)...")
-    logger.info(f"Configuration: quick={quick}, runs={num_runs}, baselines={include_baselines}, k={k}")
+    logger.info(f"Configuration: quick={quick}, runs={num_runs}, k={k}")
     
     db = SessionLocal()
     all_courses = get_all_course_titles(db)
@@ -977,11 +976,13 @@ def run_evaluation(
     # -------------------------------------------------------------------
     # Aggregate across runs
     # -------------------------------------------------------------------
+    if not all_run_results:
+        raise RuntimeError("Evaluation produced no runs")
+
     if num_runs > 1:
-        # Average metrics across runs
         final_metrics = {}
-        for metric_name in ["precision_at_k", "recall_at_k", "ndcg_at_k", "narrative_score", 
-                           "grounding_rate", "hallucination_rate", "diversity", "novelty"]:
+        for metric_name in ["precision_at_k", "recall_at_k", "ndcg_at_k", "narrative_score",
+                            "grounding_rate", "hallucination_rate", "diversity", "novelty"]:
             means = [r["metrics"][metric_name]["mean"] for r in all_run_results if metric_name in r["metrics"]]
             if means:
                 mean, ci_lower, ci_upper = bootstrap_confidence_interval(means)
@@ -989,26 +990,32 @@ def run_evaluation(
                     "mean": mean,
                     "ci_lower": ci_lower,
                     "ci_upper": ci_upper,
-                    "std": np.std(means),
+                    "std": round(float(np.std(means)), 4),
                 }
-        
-        final_coverage = np.mean([r["coverage"] for r in all_run_results])
-        final_divergence = np.mean([r["personalization_divergence"] for r in all_run_results])
-        final_overall = np.mean([r["overall_score"] for r in all_run_results])
-        
-        # Average latency percentiles
-        final_latency = {
-            "p50": np.mean([r["latency_percentiles"]["p50"] for r in all_run_results]),
-            "p95": np.mean([r["latency_percentiles"]["p95"] for r in all_run_results]),
-            "p99": np.mean([r["latency_percentiles"]["p99"] for r in all_run_results]),
-        }
     else:
         # Single run
         final_metrics = all_run_results[0]["metrics"]
-        final_coverage = all_run_results[0]["coverage"]
-        final_divergence = all_run_results[0]["personalization_divergence"]
-        final_overall = all_run_results[0]["overall_score"]
-        final_latency = all_run_results[0]["latency_percentiles"]
+
+    final_coverage = float(np.mean([r["coverage"] for r in all_run_results]))
+    final_divergence = float(np.mean([r["personalization_divergence"] for r in all_run_results]))
+    final_overall = float(np.mean([r["overall_score"] for r in all_run_results]))
+
+    # Average latency percentiles across all runs
+    final_latency = {
+        "p50": round(float(np.mean([r["latency_percentiles"]["p50"] for r in all_run_results])), 2),
+        "p95": round(float(np.mean([r["latency_percentiles"]["p95"] for r in all_run_results])), 2),
+        "p99": round(float(np.mean([r["latency_percentiles"]["p99"] for r in all_run_results])), 2),
+    }
+
+    # Sum trigger/self-correction counters and merge style counts across ALL runs
+    total_triggered_count = sum(r["triggered_count"] for r in all_run_results)
+    total_refetches_all_runs = sum(r["total_refetches"] for r in all_run_results)
+    total_critique_retries_all_runs = sum(r["total_critique_retries"] for r in all_run_results)
+
+    merged_style_counts: Dict[str, int] = {}
+    for run_result in all_run_results:
+        for style, count in run_result["persuasion_style_distribution"].items():
+            merged_style_counts[style] = merged_style_counts.get(style, 0) + count
 
     # -------------------------------------------------------------------
     # Build final report
@@ -1020,20 +1027,19 @@ def run_evaluation(
             "quick_mode": quick,
             "num_runs": num_runs,
             "k": k,
-            "include_baselines": include_baselines,
         },
         "summary": {
             "total_personas": len(PERSONAS),
-            "triggered_count": all_run_results[0]["triggered_count"],
+            "triggered_count": total_triggered_count,
             "overall_score": final_overall,
         },
         "metrics": final_metrics,
         "coverage": final_coverage,
         "personalization_divergence": final_divergence,
         "latency_percentiles": final_latency,
-        "total_refetches": all_run_results[0]["total_refetches"],
-        "total_critique_retries": all_run_results[0]["total_critique_retries"],
-        "persuasion_style_distribution": all_run_results[0]["persuasion_style_distribution"],
+        "total_refetches": total_refetches_all_runs,
+        "total_critique_retries": total_critique_retries_all_runs,
+        "persuasion_style_distribution": merged_style_counts,
         "run_results": all_run_results,
     }
 
@@ -1043,9 +1049,11 @@ def run_evaluation(
     print("\n" + "=" * 70)
     cprint("📊 AURA SMARTRECO 2026 — COMPREHENSIVE EVALUATION REPORT (v4)", Colors.CYAN, bold=True)
     print("=" * 70)
+    total_persona_evaluations = len(PERSONAS) * num_runs
+    trigger_rate = total_triggered_count / total_persona_evaluations if total_persona_evaluations else 0.0
     print(f"Total Personas            : {len(PERSONAS)}")
-    print(f"Agent Trigger Rate        : {all_run_results[0]['triggered_count']}/{len(PERSONAS)} "
-          f"({all_run_results[0]['triggered_count'] / len(PERSONAS):.0%})")
+    print(f"Agent Trigger Rate        : {total_triggered_count}/{total_persona_evaluations} "
+          f"({trigger_rate:.0%})")
     print()
     
     cprint("🎯 Retrieval Quality", Colors.BOLD)
@@ -1060,7 +1068,7 @@ def run_evaluation(
         if metric in final_metrics:
             m = final_metrics[metric]
             print(f"  {metric:<20}: {m['mean']:.2%} (95% CI: [{m['ci_lower']:.2%}, {m['ci_upper']:.2%}])")
-    print(f"  Persuasion Styles       : {all_run_results[0]['persuasion_style_distribution']}")
+    print(f"  Persuasion Styles       : {merged_style_counts}")
     print()
     
     cprint("🎨 Personalization & Diversity", Colors.BOLD)
@@ -1073,8 +1081,8 @@ def run_evaluation(
     print()
     
     cprint("🔄 Self-Correction", Colors.BOLD)
-    print(f"  Total Refetches         : {all_run_results[0]['total_refetches']}")
-    print(f"  Total Critique Retries  : {all_run_results[0]['total_critique_retries']}")
+    print(f"  Total Refetches         : {total_refetches_all_runs}")
+    print(f"  Total Critique Retries  : {total_critique_retries_all_runs}")
     print()
     
     cprint("⚡ Performance", Colors.BOLD)
@@ -1178,11 +1186,6 @@ def main():
         help="K value for @K metrics (default: 5).",
     )
     parser.add_argument(
-        "--baseline",
-        action="store_true",
-        help="Include baseline comparisons (popularity, random).",
-    )
-    parser.add_argument(
         "--compare",
         nargs=2,
         metavar=("REPORT1", "REPORT2"),
@@ -1197,7 +1200,6 @@ def main():
         run_evaluation(
             quick=args.quick,
             num_runs=args.runs,
-            include_baselines=args.baseline,
             k=args.k,
         )
 

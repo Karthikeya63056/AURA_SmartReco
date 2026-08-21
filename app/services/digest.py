@@ -29,13 +29,14 @@ def compute_digest_fingerprint(
     """
     Compute a stable sha256 fingerprint of digest content.
     
-    Deterministic: same user + same products + same narrative → same hash.
+    Deterministic: same user + same products → same hash.
     product_ids are sorted so ordering doesn't affect the fingerprint.
+    The narrative (LLM output, non-deterministic) is intentionally excluded;
+    the parameter is kept for API compatibility but ignored.
     """
     payload = {
         "u": user_id,
         "p": sorted(product_ids or []),
-        "n": narrative or "",
     }
     stable_json = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(stable_json.encode("utf-8")).hexdigest()

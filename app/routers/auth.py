@@ -1,8 +1,8 @@
 from app.services.login_lockout import check_lockout, record_failure, record_success
 import logging
 import time
-from datetime import timedelta
-from typing import Dict, List
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -63,6 +63,15 @@ def _check_auth_rate_limit(rate_key: str) -> bool:
     return True
 
 
+def _client_ip(request: Request) -> str:
+    """Client IP for rate limiting/lockout keys; honors X-Forwarded-For behind a trusted proxy."""
+    if getattr(settings, "TRUST_PROXY", False):
+        xff = request.headers.get("x-forwarded-for", "")
+        if xff:
+            return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 def _set_access_cookie(response: Response, access_token: str) -> None:
     """Attach HttpOnly session cookie for SSR pages."""
     max_age = int(getattr(settings, "ACCESS_TOKEN_EXPIRE_MINUTES", 1440)) * 60
@@ -103,8 +112,12 @@ def _create_reset_token(user_id: int) -> str:
     )
 
 
-def _verify_reset_token(token: str) -> int:
-    """Verify a reset token and return the user ID, or raise 400."""
+def _verify_reset_token(token: str, user: Optional[User] = None) -> int:
+    """Verify a reset token and return the user ID, or raise 400.
+
+    When a user is provided, rejects tokens issued before the user's last
+    password change (single-use reset links).
+    """
     payload = decode_access_token(token)
     if not payload:
         raise HTTPException(
@@ -120,12 +133,24 @@ def _verify_reset_token(token: str) -> int:
         )
 
     try:
-        return int(sub.split(":", 1)[1])
+        user_id = int(sub.split(":", 1)[1])
     except (ValueError, IndexError):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Malformed reset token.",
         )
+
+    if user is not None and user.password_changed_at is not None:
+        changed_at = user.password_changed_at
+        if changed_at.tzinfo is None:
+            changed_at = changed_at.replace(tzinfo=timezone.utc)
+        iat = payload.get("iat")
+        if not isinstance(iat, (int, float)) or int(iat) <= int(changed_at.timestamp()):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This reset link has already been used.",
+            )
+    return user_id
 
 
 @router.post(
@@ -147,7 +172,7 @@ def register(
             detail="This email address is reserved for system use.",
         )
 
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = _client_ip(request)
     rate_key = f"auth_register:{client_ip}"
     if not _check_auth_rate_limit(rate_key):
         raise HTTPException(
@@ -173,7 +198,7 @@ def login(
     db: Session = Depends(get_db),
 ):
     """Authenticate with email + password. Sets HttpOnly cookie + returns JSON token."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = _client_ip(request)
     rate_key = f"auth_login:{client_ip}"
     if not _check_auth_rate_limit(rate_key):
         raise HTTPException(
@@ -268,7 +293,7 @@ def forgot_password(
     Request a password reset link. Always returns 200 (even if the email isn't
     in the system) to avoid email enumeration attacks.
     """
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = _client_ip(request)
     rate_key = f"auth_forgot:{client_ip}"
     if not _check_auth_rate_limit(rate_key):
         raise HTTPException(
@@ -324,10 +349,14 @@ def reset_password(
             detail="User not found.",
         )
 
+    # Single-use: reject tokens issued before the last password change.
+    _verify_reset_token(token, user)
+
     user.hashed_password = get_password_hash(new_password)
     # Rev5 G4.3: bump token_version so all pre-reset sessions are revoked.
     # The user must log in again with their new password.
     user.token_version = (user.token_version or 0) + 1
+    user.password_changed_at = datetime.now(timezone.utc)
     db.commit()
 
     logger.info(f"[reset-password] Password updated + all sessions revoked for user #{user.id} ({user.email})")

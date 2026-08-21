@@ -11,11 +11,13 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import decode_access_token, get_password_hash, verify_token_version
+from app.models.agent_run import AgentRun
 from app.models.anonymous_session import AnonymousSession
 from app.models.event import Event
 from app.models.recommendation import Recommendation
 from app.models.user import User
 from app.models.user_profile import UserProfile
+from app.models.wishlist import WishlistItem
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +96,9 @@ def _gc_stale_anonymous_sessions(db: Session) -> None:
     """
     Delete anonymous session mappings (and their user rows) that have been
     inactive for > ANON_SESSION_TTL_DAYS. Runs at most once per hour.
-    Users that still have events or recommendations are kept (mapping only
-    removed) so history is never silently dropped.
+    Users that still have events, recommendations, wishlist items, or agent
+    runs are kept (mapping only removed) so history is never silently dropped.
+    Deletes run in FK-safe order: AnonymousSession → UserProfile → User.
     """
     global _last_anon_gc_time
     now = time.time()
@@ -120,15 +123,22 @@ def _gc_stale_anonymous_sessions(db: Session) -> None:
     users_with_data.update(
         row[0] for row in db.query(Recommendation.user_id).filter(Recommendation.user_id.in_(stale_user_ids))
     )
+    users_with_data.update(
+        row[0] for row in db.query(WishlistItem.user_id).filter(WishlistItem.user_id.in_(stale_user_ids))
+    )
+    users_with_data.update(
+        row[0] for row in db.query(AgentRun.user_id).filter(AgentRun.user_id.in_(stale_user_ids))
+    )
     removable = [uid for uid in stale_user_ids if uid not in users_with_data]
 
+    # FK-safe order: mapping rows first, then profile, then the user row
+    db.query(AnonymousSession).filter(AnonymousSession.id.in_([row.id for row in stale])).delete(
+        synchronize_session=False
+    )
     if removable:
         db.query(UserProfile).filter(UserProfile.user_id.in_(removable)).delete(synchronize_session=False)
         db.query(User).filter(User.id.in_(removable)).delete(synchronize_session=False)
 
-    db.query(AnonymousSession).filter(AnonymousSession.id.in_([row.id for row in stale])).delete(
-        synchronize_session=False
-    )
     db.commit()
 
 

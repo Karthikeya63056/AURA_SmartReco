@@ -31,6 +31,9 @@ class AgentState(TypedDict):
     narrative: Optional[str]
     product_ids: Optional[List[int]]
     product_reasons: Optional[List[str]]
+    llm_cost_usd: Optional[float]
+    llm_tokens: Optional[int]
+    llm_latency_ms: Optional[int]
     
     # Validation (from validate node)
     validation_passed: Optional[bool]

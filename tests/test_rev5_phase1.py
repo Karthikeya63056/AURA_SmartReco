@@ -32,11 +32,8 @@ def test_g14_new_tables_exist(client):
         )).fetchone()
         assert r is not None, "agent_runs table missing"
 
-        # vector_outbox table
-        r = session.execute(text(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='vector_outbox'"
-        )).fetchone()
-        assert r is not None, "vector_outbox table missing"
+        # vector_outbox was removed as dead code (no producers/consumers);
+        # legacy databases may still carry the table, so it is not asserted.
 
         # partial unique index
         r = session.execute(text(
@@ -48,6 +45,9 @@ def test_g14_new_tables_exist(client):
         r = session.execute(text("PRAGMA table_info(users)")).fetchall()
         col_names = [row[1] for row in r]
         assert "token_version" in col_names, "users.token_version column missing"
+
+        # users.password_changed_at column (single-use reset tokens)
+        assert "password_changed_at" in col_names, "users.password_changed_at column missing"
 
         # products.embedding_hash column
         r = session.execute(text("PRAGMA table_info(products)")).fetchall()

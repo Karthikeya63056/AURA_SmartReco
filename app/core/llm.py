@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Dict, List, Optional
 from openai import AsyncOpenAI
+import app.core.mesh as mesh
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,11 @@ async def generate_chat_completion(
     selected_model = model or settings.DEFAULT_CHAT_MODEL
     messages = messages or []
 
+    if getattr(mesh, "is_blocked", lambda: False)():
+        raise RuntimeError(
+            "Mesh API is temporarily unavailable (HTTP 402 budget latch active); use fallback"
+        )
+
     try:
         kwargs: Dict[str, Any] = {
             "model": selected_model,
@@ -55,4 +61,8 @@ async def generate_chat_completion(
         return response.choices[0].message.content or ""
     except Exception as e:
         logger.error(f"Error in Mesh API chat completion call ({selected_model}): {str(e)}")
+        if "402" in str(e):
+            note_402 = getattr(mesh, "note_402", None)
+            if callable(note_402):
+                note_402()
         raise e

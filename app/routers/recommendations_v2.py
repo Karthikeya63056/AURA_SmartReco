@@ -4,9 +4,10 @@ Rev5 recommendations router with cache-first polling.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.core.database import get_db
 from app.core.cache import cache
 from app.dependencies import get_current_user
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/recommendations", tags=["Recommendations"])
 
-CACHE_TTL_SECONDS = 900
+CACHE_TTL_SECONDS = getattr(settings, "CACHE_TTL_SECONDS", 900)
 
 
 @router.get("/current")
@@ -77,7 +78,8 @@ def get_current_recommendation(
     )
     
     if rec is None:
-        raise HTTPException(status_code=status.HTTP_204_NO_CONTENT, detail="No active recommendation")
+        # 204 must carry no body; HTTPException would illegally attach detail JSON.
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     
     # Load product details
     product_ids = rec.product_ids_json or []

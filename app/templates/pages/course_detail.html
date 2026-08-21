@@ -82,7 +82,7 @@
       <div class="label">Price</div>
       <div class="value price">
         {% if course.price and course.price > 0 %}
-          ${{ '%.0f'|format(course.price) }}
+          ${{ ('%.2f'|format(course.price)).rstrip('0').rstrip('.') }}
         {% else %}
           Free
         {% endif %}

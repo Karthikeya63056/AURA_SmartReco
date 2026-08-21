@@ -14,6 +14,7 @@ class AgentState(TypedDict):
     candidates: List[Dict[str, Any]]
     quality_score: int
     refetch_count: int
+    drop_filters: bool
     final_narrative: str
     recommended_product_ids: List[int]
     product_reasons: List[str]

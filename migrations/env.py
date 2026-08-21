@@ -3,6 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.database import Base
+import app.models  # noqa: F401 — register all models on Base.metadata
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -62,6 +63,12 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    import os
+
+    db_url = os.getenv("DATABASE_URL")
+    if db_url:
+        config.set_main_option("sqlalchemy.url", db_url)
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",

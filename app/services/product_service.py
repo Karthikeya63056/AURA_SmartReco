@@ -29,6 +29,15 @@ def _build_product_chroma_metadata(product: Product) -> Dict[str, Any]:
     }
 
 
+def _invalidate_bm25_index() -> None:
+    """Invalidate the BM25 index after a catalog mutation; never raise."""
+    try:
+        from app.core import bm25
+        bm25.invalidate()
+    except Exception:
+        pass
+
+
 def create_product(db: Session, product_data: Dict[str, Any]) -> Product:
     """
     Dual-write product creation:
@@ -38,6 +47,13 @@ def create_product(db: Session, product_data: Dict[str, Any]) -> Product:
     Fallback: On vector store error, rollback or flag needs_reindex=True.
     """
     product = Product(**product_data)
+    # Snapshot original column values before the session touches the instance,
+    # so we can rebuild a clean row if the dual-write fails and rolls back.
+    captured = {
+        c.name: getattr(product, c.name)
+        for c in product.__table__.columns
+        if c.name != "id"
+    }
     try:
         db.add(product)
         db.flush()  # Assign ID
@@ -55,16 +71,25 @@ def create_product(db: Session, product_data: Dict[str, Any]) -> Product:
 
         db.commit()
         db.refresh(product)
+        _invalidate_bm25_index()
         return product
     except Exception as e:
         logger.error(f"ChromaDB dual-write failed during create_product for '{product.title}': {str(e)}")
         db.rollback()
-        # Save to DB with needs_reindex=True
-        product.needs_reindex = True
-        db.add(product)
-        db.commit()
-        db.refresh(product)
-        return product
+        # The rolled-back instance is expired; rebuild from the pre-flush snapshot.
+        captured.pop("needs_reindex", None)
+        try:
+            fallback = Product(**captured)
+            fallback.needs_reindex = True
+            db.add(fallback)
+            db.commit()
+            db.refresh(fallback)
+            _invalidate_bm25_index()
+            return fallback
+        except Exception as fallback_error:
+            logger.error(f"Failed to persist product after rollback in create_product: {str(fallback_error)}")
+            db.rollback()
+            raise
 
 
 def update_product(db: Session, product_id: int, product_data: Dict[str, Any]) -> Optional[Product]:
@@ -96,11 +121,17 @@ def update_product(db: Session, product_id: int, product_data: Dict[str, Any]) -
         product.needs_reindex = False
         db.commit()
         db.refresh(product)
+        _invalidate_bm25_index()
         return product
     except Exception as e:
-        product.needs_reindex = True
-        db.commit()
-        db.refresh(product)
+        logger.error(f"ChromaDB dual-write failed during update_product for ID {product_id}: {str(e)}")
+        db.rollback()
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if product:
+            product.needs_reindex = True
+            db.commit()
+            db.refresh(product)
+            _invalidate_bm25_index()
         return product
 
 
@@ -137,6 +168,9 @@ def reindex_pending_products(db: Session) -> int:
         db.commit()
         success_count += len(successful_batch)
 
+    if success_count > 0:
+        _invalidate_bm25_index()
+
     return success_count
 
 
@@ -159,6 +193,7 @@ def delete_product(db: Session, product_id: int) -> bool:
         logger.error(f"ChromaDB deletion failed for product ID {product_id}: {str(e)}")
 
     db.commit()
+    _invalidate_bm25_index()
     return True
 
 
@@ -289,11 +324,13 @@ def _sql_keyword_search(query_text: str, n_results: int = 15) -> List[Dict[str, 
     # so use indexed text fields for the database-side candidate filter.
     predicates = []
     for keyword in keywords:
+        # Escape LIKE wildcards so user input can't match everything
+        keyword = keyword.replace("%", r"\%").replace("_", r"\_")
         pattern = f"%{keyword}%"
         predicates.extend((
-            Product.title.ilike(pattern),
-            Product.description.ilike(pattern),
-            Product.category.ilike(pattern),
+            Product.title.ilike(pattern, escape="\\"),
+            Product.description.ilike(pattern, escape="\\"),
+            Product.category.ilike(pattern, escape="\\"),
         ))
 
     candidate_limit = min(max(n_results, 1) * 3, 50)

@@ -769,7 +769,7 @@ def seed():
                 is_admin=True,
             )
             db.add(admin_user)
-            logger.info("Created default admin user: admin@smartreco.ai / admin123456")
+            logger.info("Created default admin user: admin@smartreco.ai (password set via seed script)")
 
         demo_user = db.query(User).filter(User.email == "demo@smartreco.ai").first()
         if not demo_user:
@@ -780,7 +780,7 @@ def seed():
                 is_admin=False,
             )
             db.add(demo_user)
-            logger.info("Created default demo user: demo@smartreco.ai / demo123456")
+            logger.info("Created default demo user: demo@smartreco.ai (password set via seed script)")
 
         guest_user = db.query(User).filter(User.email == "guest@example.com").first()
         if not guest_user:
@@ -792,7 +792,7 @@ def seed():
                 is_active=True
             )
             db.add(guest_user)
-            logger.info("Created default guest user: guest@example.com")
+            logger.info("Created default guest user: guest@example.com (password set via seed script)")
 
         db.commit()
 

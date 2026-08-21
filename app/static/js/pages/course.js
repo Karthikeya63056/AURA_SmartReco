@@ -64,15 +64,6 @@
           });
       });
     }
-
-    // Syllabus expanders tracking
-    document.querySelectorAll('[data-track-action="syllabus_view"]').forEach(function (el) {
-      el.addEventListener('click', function () {
-        if (window.SmartTracker) {
-          SmartTracker.trackSyllabusView(courseId);
-        }
-      });
-    });
   }
 
   if (document.readyState === 'loading') {

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, field_validator
 import json
@@ -43,6 +43,20 @@ class EventBatchItem(BaseModel):
     payload_json: Dict[str, Any] = Field(default_factory=dict)
     idempotency_key: Optional[str] = Field(default=None, max_length=128)
     created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator("created_at")
+    @classmethod
+    def clamp_created_at(cls, v: Optional[datetime]) -> datetime:
+        """#73: distrust client clocks — missing, >5min future, or >7d old all become server time."""
+        now = datetime.now(timezone.utc)
+        if v is None:
+            return now
+        ts = v if v.tzinfo is not None else v.replace(tzinfo=timezone.utc)
+        if (ts - now) > timedelta(minutes=5):
+            return now
+        if (now - ts) > timedelta(days=7):
+            return now
+        return ts
 
     @field_validator("event_type")
     @classmethod

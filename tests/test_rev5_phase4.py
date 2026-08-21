@@ -226,17 +226,22 @@ def test_g44_csrf_exempt_bearer_auth(client):
 # ============================================================
 
 def test_g45_digest_fingerprint_deterministic():
-    """G4.5: Same content → same fingerprint regardless of product order."""
+    """G4.5: Fingerprint is order-insensitive AND narrative-independent
+    (LLM narratives change every run and must not defeat dedupe)."""
     fp_a = compute_digest_fingerprint(1, [3, 1, 2], "hello narrative")
     fp_b = compute_digest_fingerprint(1, [1, 2, 3], "hello narrative")
     assert fp_a == fp_b, "Fingerprint should be order-insensitive"
 
     fp_c = compute_digest_fingerprint(1, [1, 2, 3], "different narrative")
-    assert fp_a != fp_c, "Different narrative → different fingerprint"
+    assert fp_a == fp_c, "Narrative changes must NOT change the fingerprint"
+
+    fp_d = compute_digest_fingerprint(1, [1, 2, 4], "hello narrative")
+    assert fp_a != fp_d, "Different products → different fingerprint"
 
 
 def test_g45_digest_dedupe_skips_identical():
-    """G4.5: After recording a digest, identical content is detected as duplicate."""
+    """G4.5: After recording a digest, the same product set is a duplicate
+    even when the narrative text differs (narrative-independent dedupe)."""
     user_id = 99999  # fake user id for isolation
     products = [1, 2, 3]
     narrative = "Test digest narrative"
@@ -248,8 +253,8 @@ def test_g45_digest_dedupe_skips_identical():
     fp = compute_digest_fingerprint(user_id, products, narrative)
     record_digest_sent(user_id, fp)
 
-    # Second time — should be detected as duplicate
-    assert is_duplicate_digest(user_id, products, narrative) is True
+    # Same products, different narrative → still a duplicate
+    assert is_duplicate_digest(user_id, products, "changed narrative") is True
 
-    # Different content — not a duplicate
-    assert is_duplicate_digest(user_id, products, "changed narrative") is False
+    # Different content (different products) — not a duplicate
+    assert is_duplicate_digest(user_id, [1, 2, 4], narrative) is False

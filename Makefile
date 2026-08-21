@@ -27,4 +27,5 @@ test:
 	$(BIN)/pytest -o pythonpath=. tests/ -v
 
 clean:
+	@$(PYTHON) -c "import sys, os; sys.exit(0 if os.environ.get('FORCE') == '1' else 1)" || (echo "Refusing to wipe chroma_data/db. Re-run with FORCE=1" && exit 1)
 	$(PYTHON) -c "import shutil, os, glob; [shutil.rmtree(p, ignore_errors=True) for p in ['__pycache__', '.pytest_cache', 'chroma_data']]; [os.remove(f) for f in glob.glob('*.db*') if os.path.exists(f)]"

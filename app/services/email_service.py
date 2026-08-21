@@ -3,17 +3,21 @@ import logging
 import os
 import re
 import smtplib
+import uuid
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formatdate
 from typing import List, Dict, Any
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Base URL for links. Override via BASE_URL env var in production.
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
+
+def _base_url() -> str:
+    """Base URL for links. Override via BASE_URL env var in production."""
+    return os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
 
 
 def _narrative_to_html(narrative: str) -> str:
@@ -71,7 +75,7 @@ def _build_html(user_name: str, narrative_html: str, courses: List[Dict[str, Any
             category = _html.escape(c.get("category") or "")
             level = _html.escape(c.get("level") or "")
             price = _price_text(c.get("price"))
-            course_url = f"{BASE_URL}/course/{c.get('id')}"
+            course_url = f"{_base_url()}/course/{c.get('id')}"
 
             badges = "".join(
                 f'<span style="display:inline-block; padding:3px 10px; border-radius:999px; '
@@ -95,7 +99,7 @@ def _build_html(user_name: str, narrative_html: str, courses: List[Dict[str, Any
             """)
         course_cards = "".join(cards)
 
-    dashboard_url = f"{BASE_URL}/dashboard"
+    dashboard_url = f"{_base_url()}/dashboard"
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -159,7 +163,7 @@ def _build_html(user_name: str, narrative_html: str, courses: List[Dict[str, Any
 
               <!-- Secondary link -->
               <div style="margin-top:28px; padding-top:24px; border-top:1px solid #e2e8f0; text-align:center;">
-                <a href="{BASE_URL}/catalog" style="font-size:14px; color:#0369a1; text-decoration:none; font-weight:600;">
+                <a href="{_base_url()}/catalog" style="font-size:14px; color:#0369a1; text-decoration:none; font-weight:600;">
                   Browse the full catalog →
                 </a>
               </div>
@@ -195,7 +199,7 @@ def _greeting() -> str:
 def _build_plain_text(user_name: str, narrative: str, courses: List[Dict[str, Any]]) -> str:
     """Plain-text fallback for email clients that strip HTML."""
     lines = [
-        f"Hi {_html.escape(user_name)},",
+        f"Hi {user_name},",
         "",
         "Here's your AURA daily digest:",
         "",
@@ -208,10 +212,10 @@ def _build_plain_text(user_name: str, narrative: str, courses: List[Dict[str, An
             title = c.get("title") or "Course"
             price = _price_text(c.get("price"))
             lines.append(f"  {i}. {title} — {price}")
-            lines.append(f"     {BASE_URL}/course/{c.get('id')}")
+            lines.append(f"     {_base_url()}/course/{c.get('id')}")
         lines.append("")
-    lines.append(f"Open your dashboard: {BASE_URL}/dashboard")
-    lines.append(f"Browse catalog:      {BASE_URL}/catalog")
+    lines.append(f"Open your dashboard: {_base_url()}/dashboard")
+    lines.append(f"Browse catalog:      {_base_url()}/catalog")
     return "\n".join(lines)
 
 
@@ -243,6 +247,8 @@ def send_daily_digest_email(
     msg["Subject"] = "🚀 Your Daily Personalized Course Digest — AURA"
     msg["From"] = f"AURA SmartReco <{mail_from}>" if "<" not in mail_from else mail_from
     msg["To"] = user_email
+    msg["Date"] = formatdate(localtime=False)
+    msg["Message-ID"] = f"<{uuid.uuid4()}@smartreco>"
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
@@ -289,7 +295,7 @@ def send_password_reset_email(user_email: str, reset_token: str) -> bool:
         or (smtp_user if smtp_user else "no-reply@aura.smartreco.ai")
     )
 
-    reset_url = f"{BASE_URL}/auth/reset-page?token={reset_token}"
+    reset_url = f"{_base_url()}/auth/reset-page?token={reset_token}"
 
     html_body = f"""<!DOCTYPE html>
 <html lang="en">
@@ -356,6 +362,8 @@ def send_password_reset_email(user_email: str, reset_token: str) -> bool:
     msg["Subject"] = "🔐 Reset your AURA password"
     msg["From"] = f"AURA SmartReco <{mail_from}>" if "<" not in mail_from else mail_from
     msg["To"] = user_email
+    msg["Date"] = formatdate(localtime=False)
+    msg["Message-ID"] = f"<{uuid.uuid4()}@smartreco>"
     msg.attach(MIMEText(text_body, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
 

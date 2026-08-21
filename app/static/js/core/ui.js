@@ -88,11 +88,13 @@
   if (!source.trim()) return;
 
   if (typeof global.marked !== 'undefined' && typeof global.marked.parse === 'function') {
+    if (typeof global.DOMPurify === 'undefined') {
+      // No sanitizer available — never inject unsanitized LLM output
+      el.textContent = source;
+      return;
+    }
     const html = global.marked.parse(source);
-    // Sanitize to prevent stored XSS from LLM narratives
-    el.innerHTML = (typeof global.DOMPurify !== 'undefined')
-      ? global.DOMPurify.sanitize(html)
-      : html;
+    el.innerHTML = global.DOMPurify.sanitize(html);
   } else {
     // Fallback: keep plain text
     el.textContent = source;

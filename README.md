@@ -552,7 +552,6 @@ AURA_SmartReco/
 │
 ├── .env.example
 ├── .gitignore
-├── docker-compose.yml
 ├── evaluation_report.json
 ├── LICENSE
 ├── Makefile
@@ -771,12 +770,6 @@ If course data and semantic data become inconsistent:
 
 ```bash
 python -m scripts.reindex_chroma
-```
-
-or:
-
-```bash
-python scripts/reindex_chroma.py
 ```
 
 ---

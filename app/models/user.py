@@ -15,6 +15,8 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     # Rev5: server-revocable sessions. JWT carries `ver`; bump to invalidate all old tokens.
     token_version = Column(Integer, default=0, nullable=False)
+    # Single-use reset tokens: reset-token `iat` must be newer than this timestamp.
+    password_changed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 

@@ -83,8 +83,6 @@ def _skill_gap_fit(skills: List[str], profile: Dict[str, Any]) -> float:
             matched += 1
             total_weight += skill_scores[skill] / max_skill
     
-    if not skills:
-        return 0.0
     # Fraction of the product's skills that match user interest (weighted)
     return _clamp(total_weight / len(skills))
 
@@ -93,9 +91,12 @@ def _difficulty_fit(level: Optional[str], profile: Dict[str, Any]) -> float:
     """
     How well the product's difficulty matches the user's preference (1-3 scale).
     fit = 1 - |preference - level| / 2
+    Unknown/missing levels score neutral (0.5), not perfect.
     """
     pref = profile.get("difficulty_preference", 1.5)
-    level_val = DIFFICULTY_MAP.get(level or "", 1.5)
+    if not level or level not in DIFFICULTY_MAP:
+        return 0.5
+    level_val = DIFFICULTY_MAP[level]
     return _clamp(1.0 - abs(pref - level_val) / 2.0)
 
 

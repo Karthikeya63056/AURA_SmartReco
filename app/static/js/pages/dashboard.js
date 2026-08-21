@@ -9,10 +9,11 @@
   function renderNarrative(narrativeEl) {
     if (window.AURA_UI) {
       AURA_UI.renderMarkdown(narrativeEl);
-    } else if (typeof marked !== 'undefined') {
+    } else if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
       const html = marked.parse(narrativeEl.textContent || '');
-      narrativeEl.innerHTML = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
+      narrativeEl.innerHTML = DOMPurify.sanitize(html);
     }
+    // No sanitizer available — leave plain text in place
   }
 
   function updateRecommendationsInPlace(payload) {
@@ -28,37 +29,30 @@
     renderNarrative(narrativeEl);
     if (payload.id != null) recCard.dataset.recommendationId = String(payload.id);
 
-    const chips = recCard.querySelector('.rec-chips');
-    if (chips) {
-      const reasons = Array.isArray(payload.product_reasons) ? payload.product_reasons : [];
-      const fragment = document.createDocumentFragment();
-      payload.product_ids.slice(0, 4).forEach(function (productId, index) {
-        const group = document.createElement('div');
-        group.className = 'rec-chip-group';
+    // Update the real recommendation links (.rec-courses), not .rec-chips
+    const productIds = payload.product_ids.slice(0, 4);
+    const reasons = Array.isArray(payload.product_reasons) ? payload.product_reasons : [];
 
-        const link = document.createElement('a');
-        link.className = 'rec-chip';
-        link.href = '/course/' + encodeURIComponent(productId);
-        link.textContent = 'View course';
-        link.dataset.recommendationId = String(payload.id || 0);
-        link.dataset.productId = String(productId);
-        link.addEventListener('click', function () {
-          if (window.trackRecommendationClick) {
-            window.trackRecommendationClick(payload.id || 0, productId);
-          }
-        });
-        group.appendChild(link);
-
-        if (reasons[index]) {
-          const reason = document.createElement('span');
-          reason.className = 'rec-reason-chip';
-          reason.textContent = reasons[index];
-          group.appendChild(reason);
-        }
-        fragment.appendChild(group);
-      });
-      chips.replaceChildren(fragment);
+    function updateCourseLink(btn, productId) {
+      if (!btn || productId == null) return;
+      btn.href = '/course/' + encodeURIComponent(productId);
+      btn.dataset.productId = String(productId);
+      if (payload.id != null) btn.dataset.recommendationId = String(payload.id);
     }
+
+    const primaryWrap = recCard.querySelector('.rec-primary');
+    if (primaryWrap) {
+      updateCourseLink(primaryWrap.querySelector('.rec-primary-btn'), productIds[0]);
+      const chip = primaryWrap.querySelector('.rec-reason-chip');
+      if (chip && reasons[0]) chip.textContent = reasons[0];
+    }
+
+    recCard.querySelectorAll('.rec-secondary').forEach(function (wrap, index) {
+      updateCourseLink(wrap.querySelector('.rec-secondary-btn'), productIds[index + 1]);
+      const chip = wrap.querySelector('.rec-reason-chip');
+      const reason = reasons[index + 1];
+      if (chip && reason) chip.textContent = reason;
+    });
 
     const statusBadges = recCard.querySelector('.rec-status-badges');
     if (statusBadges) {
@@ -143,6 +137,22 @@
   function init() {
     const narrativeEl = document.getElementById('narrativeContent');
     if (narrativeEl) renderNarrative(narrativeEl);
+
+    // Poll for fresh recommendations every 30s; never fight a manual refresh
+    if (document.getElementById('narrativeContent')) {
+      setInterval(async () => {
+        if (refreshInFlight) return;
+        try {
+          const res = await window.AURA_API.get('/api/recommendations/current');
+          // Ignore 204 (nothing yet) and non-OK statuses silently
+          if (res.status === 200 && res.data && !refreshInFlight) {
+            updateRecommendationsInPlace(res.data);
+          }
+        } catch (err) {
+          /* transient network error — ignore */
+        }
+      }, 30000);
+    }
 
     const btn = document.getElementById('refreshBtn');
     if (btn) {

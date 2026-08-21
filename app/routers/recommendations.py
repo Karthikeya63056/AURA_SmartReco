@@ -82,10 +82,23 @@ async def force_refresh_recommendation(
             detail="Please wait before refreshing again.",
         )
 
-    rec_result = await run_in_threadpool(
-        _run_generate_and_store_sync,
-        current_user.id,
-        "manual",
-    )
+    # Set the cooldown BEFORE running the pipeline so concurrent requests are
+    # rejected while the agent is in flight; roll it back on failure.
     cache.set(cooldown_key, True, ttl_seconds=300)
+    try:
+        rec_result = await run_in_threadpool(
+            _run_generate_and_store_sync,
+            current_user.id,
+            "manual",
+        )
+    except Exception:
+        cache.delete(cooldown_key)
+        logger.exception(f"Manual refresh failed for user {current_user.id}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Recommendation refresh failed. Please try again.",
+        )
+
+    # Invalidate the v2 poll cache so both stacks agree on the active rec.
+    cache.delete(f"active_rec:{current_user.id}")
     return rec_result

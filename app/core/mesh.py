@@ -41,6 +41,28 @@ def get_client() -> OpenAI:
     return _client
 
 
+def is_blocked() -> bool:
+    """True while the post-402 retry window is active."""
+    return bool(_mesh_blocked_until and time.time() < _mesh_blocked_until)
+
+
+def note_402() -> None:
+    """Record a 402 from any client (incl. legacy AsyncOpenAI paths in app.core.llm)
+    so every Mesh-backed feature honors the same cooldown window."""
+    global _mesh_blocked_until, _mesh_402_logged
+    if not _mesh_402_logged:
+        logger.warning(
+            f"Mesh API returned 402; blocking calls for "
+            f"{MESH_RETRY_AFTER_SECONDS // 60} minutes"
+        )
+        _mesh_402_logged = True
+    _mesh_blocked_until = time.time() + MESH_RETRY_AFTER_SECONDS
+
+
+# Usage of the most recent chat completion: {"total_tokens": int|None}
+last_usage: Optional[Dict[str, Any]] = None
+
+
 def chat(
     messages: List[Dict[str, str]],
     model: Optional[str] = None,
@@ -84,6 +106,8 @@ def chat(
         response = client.chat.completions.create(**kwargs)
         latency_ms = int((time.perf_counter() - start) * 1000)
         usage = response.usage
+        global last_usage
+        last_usage = {"total_tokens": usage.total_tokens if usage else None}
         logger.info(
             f"[Mesh] chat {selected_model}: {latency_ms}ms, "
             f"tokens={usage.total_tokens if usage else '?'}"
@@ -108,69 +132,44 @@ def chat(
 
 def embed(text: str, model: Optional[str] = None) -> List[float]:
     """
-    Synchronous embedding.
-    
-    Args:
-        text: Single text string to embed.
-        model: Model identifier (defaults to settings.DEFAULT_EMBEDDING_MODEL).
-    
-    Returns:
-        List of embedding vector floats.
-    
-    Raises:
-        MeshAPIUnavailable: If Mesh is blocked (402 latch active).
-        Exception: Any other API error.
+    Deprecated remote-embedding path.
+
+    Embeddings are produced locally by MiniLM (app.core.embeddings) — calling
+    the Mesh API with a local-model name can never work. Kept as an explicit
+    error so accidental callers fail fast instead of burning API quota.
     """
-    global _mesh_blocked_until, _mesh_402_logged
-    
-    if _mesh_blocked_until and time.time() < _mesh_blocked_until:
-        raise MeshAPIUnavailable(
-            "Mesh API is temporarily unavailable (HTTP 402)"
-        )
-    
-    client = get_client()
-    selected_model = model or settings.DEFAULT_EMBEDDING_MODEL
-    
-    try:
-        response = client.embeddings.create(
-            model=selected_model,
-            input=[text],
-        )
-        return response.data[0].embedding
-    except Exception as e:
-        error_str = str(e)
-        if "402" in error_str:
-            if not _mesh_402_logged:
-                logger.warning(
-                    f"Mesh embeddings returned 402; blocking calls for "
-                    f"{MESH_RETRY_AFTER_SECONDS // 60} minutes"
-                )
-                _mesh_402_logged = True
-            _mesh_blocked_until = time.time() + MESH_RETRY_AFTER_SECONDS
-            raise MeshAPIUnavailable(
-                "Mesh API returned HTTP 402 (budget/quota exceeded)"
-            ) from e
-        logger.error(f"[Mesh] embed failed ({selected_model}): {e}")
-        raise
+    raise MeshAPIUnavailable(
+        "mesh.embed() is retired: embeddings are generated locally via "
+        "sentence-transformers MiniLM (app.core.embeddings / MeshEmbeddingFunction)."
+    )
 
 
 def embed_batch(texts: List[str], model: Optional[str] = None) -> List[List[float]]:
     """
     Batch embedding for multiple texts.
-    
+
     Args:
         texts: List of text strings to embed.
         model: Model identifier (defaults to settings.DEFAULT_EMBEDDING_MODEL).
-    
+
     Returns:
         List of embedding vectors (one per input text).
     """
+    global _mesh_blocked_until, _mesh_402_logged
+
     if not texts:
         return []
-    
+
+    # Entry gate: honor the post-402 cooldown BEFORE hitting the API
+    if _mesh_blocked_until and time.time() < _mesh_blocked_until:
+        raise MeshAPIUnavailable(
+            "Mesh API is temporarily unavailable (HTTP 402); "
+            f"retry window active until {time.ctime(_mesh_blocked_until)}"
+        )
+
     client = get_client()
     selected_model = model or settings.DEFAULT_EMBEDDING_MODEL
-    
+
     try:
         response = client.embeddings.create(
             model=selected_model,
@@ -180,7 +179,6 @@ def embed_batch(texts: List[str], model: Optional[str] = None) -> List[List[floa
     except Exception as e:
         error_str = str(e)
         if "402" in error_str:
-            global _mesh_blocked_until, _mesh_402_logged
             if not _mesh_402_logged:
                 logger.warning(
                     f"Mesh batch embeddings returned 402; blocking calls for "

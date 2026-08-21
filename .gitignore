@@ -12,3 +12,7 @@ venv/
 .venv/
 .pytest_cache/
 baseline_tests.txt
+.env.local
+.env.*.local
+evaluation_report*.json
+chroma_data_backup/

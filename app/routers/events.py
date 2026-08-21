@@ -62,12 +62,10 @@ def ingest_event_batch(
     if not payload.events:
         return {"status": "queued", "accepted": 0}
 
-    session_id = payload.events[0].session_id if payload.events else "default_session"
-    user = current_user or get_anonymous_user(db, session_id=session_id)
-    user_id = user.id
-
+    # #27: rate-limit BEFORE any DB writes / anonymous-user resolution.
+    # Unauthenticated requests are keyed on the raw client IP (no user lookup yet).
     if current_user:
-        rate_key = f"user_{user_id}"
+        rate_key = f"user_{current_user.id}"
     else:
         client_ip = request.client.host if request.client else "unknown"
         rate_key = f"ip_{client_ip}"
@@ -78,24 +76,40 @@ def ingest_event_batch(
             detail="Event rate limit exceeded. Max 100 events per minute."
         )
 
-    accepted = 0
+    # #69: mixed-session batches — attribute each group to the user resolved
+    # for ITS session (authenticated users own all groups).
+    grouped: Dict[str, List] = {}
     for item in payload.events:
-        if item.event_type not in ALLOWED_EVENT_TYPES:
-            logger.warning(f"Rejected disallowed event_type: {item.event_type}")
-            continue
-        if event_buffer.push({
-            "user_id": user_id,
-            "session_id": item.session_id,
-            "event_type": item.event_type,
-            "payload_json": item.payload_json,
-            "idempotency_key": item.idempotency_key,
-            "created_at": item.created_at,
-        }):
-            accepted += 1
+        grouped.setdefault(item.session_id, []).append(item)
 
-    # Rev5 Phase 3: evaluate 5-gate trigger and submit enqueued runs (non-fatal)
+    first_session_id = next(iter(grouped))
+    first_user_id = current_user.id if current_user else None
+
+    accepted = 0
+    for group_session_id, items in grouped.items():
+        user = current_user or get_anonymous_user(db, session_id=group_session_id)
+        user_id = user.id
+        if first_user_id is None:
+            first_user_id = user_id
+        for item in items:
+            if item.event_type not in ALLOWED_EVENT_TYPES:
+                logger.warning(f"Rejected disallowed event_type: {item.event_type}")
+                continue
+            if event_buffer.push({
+                "user_id": user_id,
+                "session_id": item.session_id,
+                "event_type": item.event_type,
+                "payload_json": item.payload_json,
+                "idempotency_key": item.idempotency_key,
+                "created_at": item.created_at,
+            }):
+                accepted += 1
+
+    # Rev5 Phase 3: evaluate 5-gate trigger and submit enqueued runs (non-fatal).
+    # #21: flush the just-pushed batch synchronously so the trigger can see it.
     try:
-        trigger_result = evaluate_5gate_trigger(db, user_id, session_id)
+        event_buffer.flush_pending_sync()
+        trigger_result = evaluate_5gate_trigger(db, first_user_id, first_session_id)
         if trigger_result.get("should_enqueue") and trigger_result.get("run_id"):
             dispatcher.submit_run_sync(trigger_result["run_id"])
     except Exception as e:

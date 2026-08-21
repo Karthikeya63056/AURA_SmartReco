@@ -2,18 +2,34 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Union, Any
 from jose import jwt, JWTError
 from passlib.context import CryptContext
+import bcrypt as _bcrypt
 from app.config import settings
+
+# passlib 1.7.4 probes the bcrypt backend with >72-byte test vectors during
+# backend load; bcrypt>=4.1 raises ValueError instead of silently truncating.
+# Restore the silent-truncation contract passlib expects (real passwords are
+# truncated explicitly in hash/verify below).
+_orig_hashpw = _bcrypt.hashpw
+
+
+def _hashpw_compat(password: bytes, salt: bytes) -> bytes:
+    return _orig_hashpw(password[:72], salt)
+
+
+_bcrypt.hashpw = _hashpw_compat
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain text password against its hash."""
+    plain_password = plain_password.encode("utf-8")[:72].decode("utf-8", "ignore")
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
     """Generate bcrypt hash for a password."""
+    password = password.encode("utf-8")[:72].decode("utf-8", "ignore")
     return pwd_context.hash(password)
 
 
@@ -36,6 +52,7 @@ def create_access_token(
 
     to_encode = {
         "exp": expire,
+        "iat": int(datetime.now(timezone.utc).timestamp()),
         "sub": str(subject),
         "ver": int(token_version),  # Rev5 G4.3: revocation claim
     }

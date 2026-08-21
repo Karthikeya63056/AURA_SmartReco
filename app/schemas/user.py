@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 class UserBase(BaseModel):
     email: EmailStr
-    full_name: Optional[str] = None
+    full_name: Optional[str] = Field(default=None, max_length=120)
 
 
 class UserCreate(UserBase):

@@ -32,6 +32,23 @@ def _load_products_in_order(db: Session, product_ids: List[int]) -> List[Product
     return [product_map[product_id] for product_id in product_ids if product_id in product_map]
 
 
+def _product_to_dict(product: Product, reason: str = "") -> Dict[str, Any]:
+    """Convert a Product ORM object to a plain dict (ORM objects must never be cached)."""
+    return {
+        "id": product.id,
+        "title": product.title,
+        "category": product.category,
+        "level": product.level,
+        "price": product.price,
+        "rating": product.rating,
+        "description": product.description,
+        "skills_taught": product.skills_taught or [],
+        "tags": product.tags or [],
+        "metadata_json": product.metadata_json or {},
+        "reason": reason,
+    }
+
+
 class RecommendationService:
     """Orchestrates trigger checks, agent execution, and recommendation retrieval."""
 
@@ -141,7 +158,7 @@ class RecommendationService:
         # Try cache
         cached_rec = cache.get(f"active_rec:{user_id}")
         if cached_rec:
-            # Attach product objects with paired reasons
+            # Attach product dicts with paired reasons
             pids = cached_rec.get("product_ids", [])
             reasons = cached_rec.setdefault("product_reasons", [])
             fetched = _load_products_in_order(db, pids)
@@ -150,11 +167,10 @@ class RecommendationService:
                 for index, product_id in enumerate(pids)
                 if index < len(reasons)
             }
-            products = []
-            for p in fetched:
-                p.reason = reason_by_product_id.get(p.id, "")
-                products.append(p)
-            cached_rec["products"] = products
+            cached_rec["products"] = [
+                _product_to_dict(p, reason_by_product_id.get(p.id, ""))
+                for p in fetched
+            ]
             return cached_rec
 
         # Fetch from DB
@@ -172,10 +188,10 @@ class RecommendationService:
                 for index, product_id in enumerate(pids)
                 if index < len(reasons)
             }
-            products = []
-            for p in fetched:
-                p.reason = reason_by_product_id.get(p.id, "")
-                products.append(p)
+            products = [
+                _product_to_dict(p, reason_by_product_id.get(p.id, ""))
+                for p in fetched
+            ]
             result = {
                 "id": rec.id,
                 "narrative": rec.narrative,
@@ -200,7 +216,7 @@ class RecommendationService:
             "narrative": "### Welcome to SmartReco 2026! 🚀\nExplore our most popular and trending courses tailored for tech professionals. As you browse, our AI agent will personalize recommendations specifically for your goals.",
             "product_ids": [p.id for p in popular_products],
             "product_reasons": [],
-            "products": popular_products,
+            "products": [_product_to_dict(p) for p in popular_products],
             "quality_score": 100,
             "trigger_reason": "cold_start_fallback",
             "created_at": None

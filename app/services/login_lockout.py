@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 LOCKOUT_WINDOW_SECONDS = 15 * 60  # 15 minutes
 MAX_FAILS_PER_WINDOW = 5
+MAX_COUNTER_KEYS = 50_000  # Hard cap to bound in-memory growth
 
 # {key: (fail_count, window_start_epoch)}
 _counters: dict = {}
@@ -81,6 +82,17 @@ def record_failure(ip: str, email: str) -> None:
                 else:
                     _counters[key] = (count + 1, window_start)
             else:
+                if len(_counters) >= MAX_COUNTER_KEYS:
+                    # Bound memory: purge expired windows before admitting new keys
+                    expired = [
+                        k for k, (_, window_start) in _counters.items()
+                        if now - window_start >= LOCKOUT_WINDOW_SECONDS
+                    ]
+                    for k in expired:
+                        del _counters[k]
+                if len(_counters) >= MAX_COUNTER_KEYS and key != ip_key:
+                    # Still at cap — skip the attacker-controlled email key (IP still counts)
+                    continue
                 _counters[key] = (1, now)
 
 

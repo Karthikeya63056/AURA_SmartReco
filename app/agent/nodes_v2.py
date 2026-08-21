@@ -14,6 +14,7 @@ from typing import Dict, Any, List, Optional
 from app.core.database import SessionLocal
 from app.core import mesh
 from app.core.cache import cache
+from app.config import settings
 from app.models.recommendation import Recommendation
 from app.models.agent_run import AgentRun
 from app.services.signals import build_user_profile
@@ -179,6 +180,9 @@ def generate(state: Dict[str, Any]) -> Dict[str, Any]:
     degraded = state.get("retrieval_degraded", False)
     narrative = None
     reasons = [f"Matches your interest in {r.get('category', 'this area')}." for r in shortlist]
+    llm_tokens: Optional[int] = None
+    llm_cost_usd: Optional[float] = None
+    llm_latency_ms: Optional[int] = None
 
     if _llm_enabled() and shortlist:
         try:
@@ -204,6 +208,19 @@ def generate(state: Dict[str, Any]) -> Dict[str, Any]:
             content = mesh.chat([{"role": "user", "content": prompt}])
             latency = int((time.perf_counter() - start) * 1000)
 
+            # Cost capture: prefer real usage stats if the mesh module exposes
+            # them (last_usage); otherwise estimate from character counts (~4 chars/token).
+            usage = getattr(mesh, "last_usage", None)
+            if isinstance(usage, dict) and usage.get("total_tokens"):
+                tokens = int(usage["total_tokens"])
+            else:
+                tokens = len(prompt) // 4 + len(content) // 4
+            llm_tokens = tokens
+            llm_latency_ms = latency
+            llm_cost_usd = tokens / 1000.0 * float(
+                getattr(settings, "LLM_COST_PER_1K_TOKENS", 0.002) or 0.0
+            )
+
             # Parse NARRATIVE: and REASONS:
             narrative = content
             m = re.search(r"NARRATIVE:\s*(.+?)(?:REASONS:|$)", content, re.S | re.I)
@@ -224,6 +241,9 @@ def generate(state: Dict[str, Any]) -> Dict[str, Any]:
         "product_ids": product_ids,
         "product_reasons": reasons,
         "retrieval_degraded": degraded,
+        "llm_cost_usd": llm_cost_usd,
+        "llm_tokens": llm_tokens,
+        "llm_latency_ms": llm_latency_ms,
     }
 
 
@@ -241,6 +261,20 @@ def validate(state: Dict[str, Any]) -> Dict[str, Any]:
     for pattern in PROHIBITED_PATTERNS:
         if re.search(pattern, narrative, re.I):
             problems.append(f"prohibited claim: {pattern}")
+
+    # Title grounding: the narrative must mention at least one shortlist title
+    # (same TOP_N_FOR_NARRATIVE slice generate() narrates).
+    ranked = state.get("ranked_candidates") or []
+    shortlist_titles = [
+        str(r.get("title") or "")
+        for r in ranked[:TOP_N_FOR_NARRATIVE]
+    ]
+    shortlist_titles = [t for t in shortlist_titles if t]
+    if shortlist_titles:
+        narrative_lower = narrative.lower()
+        mentioned = any(t.lower() in narrative_lower for t in shortlist_titles)
+        if not mentioned:
+            problems.append("narrative does not mention any recommended course title")
 
     if problems:
         return {
@@ -275,6 +309,13 @@ def persist(state: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         with SessionLocal() as session:
+            # Deactivate previous active recommendations so only the newest
+            # one is active (mirrors v1's store_node pattern).
+            session.query(Recommendation).filter(
+                Recommendation.user_id == user_id,
+                Recommendation.is_active == True,  # noqa: E712
+            ).update({"is_active": False})
+
             rec = Recommendation(
                 user_id=user_id,
                 narrative=narrative,
@@ -297,7 +338,10 @@ def persist(state: Dict[str, Any]) -> Dict[str, Any]:
                 run.candidate_scores_json = json.dumps(
                     [{k: r.get(k) for k in ("product_id", "final_score", "breakdown")} for r in ranked]
                 )
-                run.latency_ms = None
+                run.latency_ms = state.get("llm_latency_ms")
+                run.cost_usd = state.get("llm_cost_usd")
+                run.tokens = state.get("llm_tokens")
+                run.model_used = getattr(settings, "DEFAULT_CHAT_MODEL", None)
             session.commit()
             session.refresh(rec)
             if run:
