@@ -380,9 +380,9 @@ def page_homepage(
 
     courses = list_products(db=db, limit=4)
     return templates.TemplateResponse(
+        request,
         "pages/landing.html",
         {
-            "request": request,
             "user": user,
             "courses": courses,
             "recommendation": None,
@@ -398,9 +398,9 @@ def page_landing(
 ):
     courses = list_products(db=db, limit=4)
     return templates.TemplateResponse(
+        request,
         "pages/landing.html",
         {
-            "request": request,
             "user": user,
             "courses": courses,
             "recommendation": None,
@@ -432,9 +432,9 @@ def page_dashboard(
     recently_viewed = build_recently_viewed(db, user.id, limit=8)
 
     return templates.TemplateResponse(
+        request,
         "pages/dashboard.html",
         {
-            "request": request,
             "user": user,
             "courses": courses,
             "recommendation": recommendation_to_dict(rec_row),
@@ -452,9 +452,9 @@ def page_catalog(
 ):
     courses = list_products(db=db, limit=50)
     return templates.TemplateResponse(
+        request,
         "pages/catalog.html",
         {
-            "request": request,
             "user": user,
             "courses": courses,
         },
@@ -485,9 +485,9 @@ def page_course_detail(
         )
 
     return templates.TemplateResponse(
+        request,
         "pages/course_detail.html",
         {
-            "request": request,
             "user": user,
             "course": course,
             "in_wishlist": in_wishlist,
@@ -501,9 +501,9 @@ def page_paths(
     user: Optional[User] = Depends(get_current_user_optional),
 ):
     return templates.TemplateResponse(
+        request,
         "pages/paths.html",
         {
-            "request": request,
             "user": user,
         },
     )
@@ -515,9 +515,9 @@ def page_about(
     user: Optional[User] = Depends(get_current_user_optional),
 ):
     return templates.TemplateResponse(
+        request,
         "pages/about.html",
         {
-            "request": request,
             "user": user,
         },
     )
@@ -551,8 +551,9 @@ def page_wishlist(
                 courses.append(p)
 
     return templates.TemplateResponse(
+        request,
         "pages/wishlist.html",
-        {"request": request, "user": user, "courses": courses},
+        {"user": user, "courses": courses},
     )
 
 
@@ -588,9 +589,9 @@ def page_profile(
     )
 
     return templates.TemplateResponse(
+        request,
         "pages/profile.html",
         {
-            "request": request,
             "user": user,
             "recommendation": recommendation_to_dict(rec_row),
             "user_profile": user_profile,
@@ -624,9 +625,9 @@ def page_search(
         )
 
     return templates.TemplateResponse(
+        request,
         "pages/search.html",
         {
-            "request": request,
             "user": user,
             "query": q,
             "courses": courses,
@@ -642,9 +643,9 @@ def page_login(
     if user:
         return RedirectResponse(url="/dashboard", status_code=302)
     return templates.TemplateResponse(
+        request,
         "pages/login.html",
         {
-            "request": request,
             "user": user,
         },
     )
@@ -658,9 +659,9 @@ def page_register(
     if user:
         return RedirectResponse(url="/dashboard", status_code=302)
     return templates.TemplateResponse(
+        request,
         "pages/register.html",
         {
-            "request": request,
             "user": user,
         },
     )
@@ -694,9 +695,9 @@ def page_admin_dashboard(
     outcomes = _compute_recommendation_outcomes()
 
     return templates.TemplateResponse(
+        request,
         "admin/dashboard.html",
         {
-            "request": request,
             "user": user,
             "product_count": product_count,
             "event_count": event_count,
@@ -723,9 +724,9 @@ def page_admin_manage_products(
 
     products_list = db.query(Product).order_by(Product.id.desc()).all()
     return templates.TemplateResponse(
+        request,
         "admin/products.html",
         {
-            "request": request,
             "user": user,
             "products": products_list,
         },
@@ -764,9 +765,9 @@ def page_admin_trace(
     )
 
     return templates.TemplateResponse(
+        request,
         "admin/trace.html",
         {
-            "request": request,
             "user": user,
             "user_id": user_id,
             "target_user": target_user,
@@ -783,8 +784,9 @@ def page_admin_trace(
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc):
     return templates.TemplateResponse(
+        request,
         "pages/404.html",
-        {"request": request, "user": None},
+        {"user": None},
         status_code=404,
     )
 
@@ -793,8 +795,9 @@ async def not_found_handler(request: Request, exc):
 async def server_error_handler(request: Request, exc):
     logger.exception("Unhandled server error: %s", exc)
     return templates.TemplateResponse(
+        request,
         "pages/500.html",
-        {"request": request, "user": None},
+        {"user": None},
         status_code=500,
     )
 

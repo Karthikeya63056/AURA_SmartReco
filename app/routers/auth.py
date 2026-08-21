@@ -349,8 +349,9 @@ def page_reset_password(
             error = exc.detail
 
     return templates.TemplateResponse(
+        request,
         "pages/reset_password.html",
-        {"request": request, "user": user, "token": token, "error": error},
+        {"user": user, "token": token, "error": error},
     )
 
 
@@ -363,6 +364,7 @@ def page_forgot_password(
     if user:
         return RedirectResponse(url="/dashboard", status_code=302)
     return templates.TemplateResponse(
+        request,
         "pages/forgot_password.html",
-        {"request": request, "user": user},
+        {"user": user},
     )

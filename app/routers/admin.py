@@ -312,9 +312,9 @@ def page_admin_agent_runs(
     stats = _compute_agent_run_stats(db)
 
     return templates.TemplateResponse(
+        request,
         "admin/agent_runs.html",
         {
-            "request": request,
             "user": user,
             "runs": display_runs,
             "stats": stats,
