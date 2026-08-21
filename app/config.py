@@ -7,13 +7,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables or .env file."""
 
+    # Mesh API (chat completions)
     MESH_API_KEY: str = "rsk_demo_key"
     MESH_BASE_URL: str = "https://api.meshapi.ai/v1"
+
+    # OpenRouter embeddings (separate endpoint, free tier)
+    # Env var name matches field name (pydantic-settings convention)
+    EMBEDDINGS_BASE_URL: str = "https://openrouter.ai/api/v1"
+    EMBEDDINGS_API_KEY: str = ""
+    EMBEDDINGS_MODEL: str = "liquid/lfm-2.5-embedding-350m:free"
 
     # Models — defaults target free Mesh API models
     DEFAULT_CHAT_MODEL: str = "tencent/hy3"
     MAIN_CHAT_MODEL: str = "tencent/hy3"
-    DEFAULT_EMBEDDING_MODEL: str = "sentence-transformers/all-minilm-l6-v2"
+    DEFAULT_EMBEDDING_MODEL: str = "liquid/lfm-2.5-embedding-350m:free"
 
     DATABASE_URL: str = "sqlite:///./smartreco.db"
     CHROMA_PERSIST_DIR: str = "./chroma_data"
@@ -78,5 +85,10 @@ if not settings.MESH_API_KEY or settings.MESH_API_KEY.strip() == "rsk_demo_key":
     logger.warning(
         "MESH_API_KEY is missing or uses the demo placeholder; Mesh-backed features "
         "will fall back to SQL search where possible."
+    )
+if not settings.EMBEDDINGS_API_KEY:
+    logger.warning(
+        "EMBEDDINGS_API_KEY not set; vector search will be unavailable. "
+        "Set it in .env to enable embeddings."
     )
 _validate_jwt_secret(settings.JWT_SECRET)

@@ -1,86 +1,86 @@
+"""
+Local embedding function using sentence-transformers (MiniLM-L6-v2).
+Replaces OpenRouter API calls with fast local inference.
+"""
 import logging
-import time
+from typing import List, Optional
 from functools import lru_cache
-from typing import List
+
 from chromadb import EmbeddingFunction, Documents, Embeddings
-from openai import OpenAI
+from sentence_transformers import SentenceTransformer
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# After an HTTP 402, pause embedding calls for this long before retrying.
-# (Time-based instead of a permanent latch: the API key may be topped up
-#  without restarting the app.)
-EMBEDDINGS_RETRY_AFTER_SECONDS = 5 * 60
-
 
 class MeshEmbeddingUnavailable(RuntimeError):
-    """Raised when Mesh embeddings cannot be used and SQL fallback is required."""
+    """Raised when embeddings cannot be generated."""
 
 
 class MeshEmbeddingFunction(EmbeddingFunction[Documents]):
     """
-    Custom ChromaDB EmbeddingFunction that routes ALL embedding requests 
-    (indexing and queries) through the Mesh API using 'sentence-transformers/all-minilm-l6-v2'.
+    Local embedding function using MiniLM-L6-v2 (384-dim vectors).
+    Drop-in replacement for OpenRouter API version.
     """
 
-    def __init__(self, model_name: str = None):
-        self.model_name = model_name or settings.DEFAULT_EMBEDDING_MODEL
-        # Chroma's embedding interface is synchronous, so it needs its own
-        # synchronous client rather than the async chat-completion client.
-        self.client = OpenAI(
-            base_url=settings.MESH_BASE_URL,
-            api_key=settings.MESH_API_KEY,
-        )
-        self._embedding_402_logged = False
-        self._embeddings_blocked_until = 0.0
+    _model: Optional[SentenceTransformer] = None
+    _model_lock = None
 
-    @lru_cache(maxsize=128)
-    def _embed_text(self, text: str) -> tuple[float, ...]:
-        response = self.client.embeddings.create(
-            model=self.model_name,
-            input=[text],
-        )
-        return tuple(response.data[0].embedding)
+    def __init__(self, model_name: str = None):
+        # model_name parameter kept for API compatibility, but we use MiniLM-L6-v2
+        self.model_name = "sentence-transformers/all-MiniLM-L6-v2"
+        self._init_model()
+
+    def _init_model(self):
+        """Lazy-load the model on first use."""
+        if self._model is None:
+            try:
+                logger.info(f"Loading embedding model: {self.model_name}")
+                self._model = SentenceTransformer(self.model_name)
+                logger.info(f"Embedding model loaded: dim={self._model.get_sentence_embedding_dimension()}")
+            except Exception as e:
+                logger.error(f"Failed to load embedding model: {e}")
+                raise MeshEmbeddingUnavailable(f"Model load error: {e}")
+
+    @lru_cache(maxsize=1024)
+    def _embed_single(self, text: str) -> List[float]:
+        """Embed a single text with caching."""
+        try:
+            # Truncate to ~500 tokens (MiniLM has 512 token limit)
+            # Approximate: 1 token ≈ 4 chars, so 500 tokens ≈ 2000 chars
+            truncated = text[:2000] if len(text) > 2000 else text
+            embedding = self._model.encode(truncated, normalize_embeddings=True)
+            return embedding.tolist()
+        except Exception as e:
+            logger.error(f"Embedding failed: {e}")
+            raise MeshEmbeddingUnavailable(f"Embedding error: {e}")
 
     def __call__(self, input: Documents) -> Embeddings:
-        """
-        Embed documents/texts using Mesh API.
-        
-        Args:
-            input: List of strings (Documents)
-            
-        Returns:
-            List of embedding vector floats
-        """
+        """Embed a batch of documents."""
         if not input:
             return []
-            
+
         # Ensure input is a list of strings
-        texts = list(input) if isinstance(input, (list, tuple)) else [str(input)]
+        if isinstance(input, str):
+            texts = [input]
+        else:
+            texts = list(input)
 
-        if self._embeddings_blocked_until and time.time() < self._embeddings_blocked_until:
-            raise MeshEmbeddingUnavailable(
-                "Mesh embeddings are temporarily unavailable (HTTP 402); "
-                "SQL search fallback in use until retry window elapses"
-            )
-
+        # Batch encode for better performance
         try:
-            return [list(self._embed_text(text)) for text in texts]
+            # Truncate all texts
+            truncated_texts = [t[:2000] if len(t) > 2000 else t for t in texts]
+            embeddings = self._model.encode(
+                truncated_texts,
+                normalize_embeddings=True,
+                batch_size=32,
+                show_progress_bar=False
+            )
+            return [emb.tolist() for emb in embeddings]
         except Exception as e:
-            if "402" in str(e):
-                if not self._embedding_402_logged:
-                    logger.warning(
-                        "Mesh embeddings are unavailable (HTTP 402); using SQL search "
-                        f"fallback. Will retry in {EMBEDDINGS_RETRY_AFTER_SECONDS // 60} min."
-                    )
-                    self._embedding_402_logged = True
-                self._embeddings_blocked_until = time.time() + EMBEDDINGS_RETRY_AFTER_SECONDS
-                raise MeshEmbeddingUnavailable(
-                    "Mesh embeddings are unavailable (HTTP 402)"
-                ) from e
-            else:
-                logger.error(
-                    f"Error creating embeddings via Mesh API ({self.model_name}): {str(e)}"
-                )
-            raise
+            logger.error(f"Batch embedding failed: {e}")
+            # Fall back to single embeddings
+            embeddings = []
+            for text in texts:
+                embeddings.append(self._embed_single(text))
+            return embeddings
